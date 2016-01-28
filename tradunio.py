@@ -70,13 +70,13 @@ def main():
         my_players = write_user_players(com.myid, com.username)
         for i, player in enumerate(my_players):
             barras = write_prices_player(idp=player[0], player=player[1])
-            precio = float(barras[-1][2])
-            date = barras[-1][1]
-            my_players[i].extend([precio, date])
+            price = float(barras[-1][2])
+            dat = barras[-1][1]
+            my_players[i].extend([price, dat])
 
         headers = ['Player ID', 'Name', 'Mkt price', 'Last date']
         print 'Valor del equipo: %s € - Dinero: %s €' % (
-        locale.format("%d", teamvalue, grouping=True), locale.format("%d", money, grouping=True))
+            locale.format("%d", teamvalue, grouping=True), locale.format("%d", money, grouping=True))
         print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
         clean_players()
 
@@ -132,10 +132,10 @@ def clean_players():
     limpiar = db.simple_query('SELECT idp,date FROM transactions WHERE type="Sell" ORDER BY date DESC')
     for limpia in limpiar:
         borrar = db.simple_query(
-            'SELECT idp,date FROM transactions WHERE type="Buy" AND idp=? AND date<? ORDER BY date DESC LIMIT 1',
-            (limpia[0], limpia[1],))
+            'SELECT idp,date FROM transactions WHERE type="Buy" AND idp=%s AND date<%s ORDER BY date DESC LIMIT 1'
+            % (limpia[0], limpia[1]))
         if borrar:
-            db.commit_query('UPDATE players SET idu=NULL WHERE idp=?', (limpia[0]))
+            db.commit_query('UPDATE players SET idu=NULL WHERE idp=%s' % limpia[0])
             limpiados.append(limpia)
     return limpiados
 
@@ -153,12 +153,12 @@ def check_sell(my_players):
 
         compra = db.simple_query(
             'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
-        if compra == None:
+        if compra is None:
             precio_actual = float(
                 db.simple_query('SELECT price FROM prices WHERE idp=%s ORDER BY date DESC LIMIT 1' % idp)[0])
             precio_inicial = float(db.simple_query(
                 'SELECT price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' % (
-                idp, '%s0801' % date.today().year))[0])
+                    idp, '%s0801' % date.today().year))[0])
             rent = (precio_actual - precio_inicial) / precio_inicial * 100
             vender.append([idp, name, vende, '-', precio_inicial, precio_actual, colorize_rentability(rent), rent])
             continue
@@ -235,9 +235,9 @@ def write_transactions(myid):
             price = trans[3]
             trans_date = translate_dates([trans[5]])[0]
             idp = com.info_player_id(player)
-            db.nocommit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (?,?,?)', (idp, player, myid,))
-            db.nocommit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (?,?,?,?)',
-                              (idp, 'Buy', price, trans_date,))
+            db.nocommit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)' % (idp, player, myid))
+            db.nocommit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (%s,%s,%s,%s)' %
+                              (idp, 'Buy', price, trans_date))
             db.commit()
             ret.append([idp, player, float(price), trans_date, '%sBought%s' % (GREEN, ENDC), colorize_rentability(0.0)])
         elif trans[6] == 'Pendiente':
@@ -254,15 +254,15 @@ def write_transactions(myid):
             price = trans[3]
             trans_date = translate_dates([trans[5]])[0]
             idp = com.info_player_id(player)
-            db.commit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (?,?,?,?)',
-                            (idp, 'Sell', price, trans_date,))
+            db.commit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (%s,%s,%s,%s)' %
+                            (idp, 'Sell', price, trans_date))
             compra = db.simple_query(
-                'SELECT date,price FROM transactions WHERE idp=? AND type="Buy" ORDER BY date DESC LIMIT 1', (idp,))
+                'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
             if compra is None:
                 # Si el jugador lo tenemos dede el inicio...
                 compra = db.simple_query(
-                    'SELECT date,price FROM prices WHERE idp=? AND date>? ORDER BY date ASC LIMIT 1',
-                    (idp, '%s0801' % date.today().year,))
+                    'SELECT date,price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' %
+                    (idp, '%s0801' % date.today().year))
 
             precio_compra = float(compra[1])
             rent = (price - precio_compra) / precio_compra * 100
@@ -274,13 +274,14 @@ def write_transactions(myid):
             price = trans[3]
             trans_date = translate_dates([trans[5]])[0]
             idp = com.info_player_id(player)
-            compra = db.simple_query('SELECT date,price FROM transactions WHERE idp=? AND type="Buy" ORDER BY date DESC LIMIT 1',
-                      (idp,))
+            compra = db.simple_query(
+                'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
 
             if compra is None:
                 # Si el jugador lo tenemos dede el inicio...
-                compra = db.simple_query('SELECT date,price FROM prices WHERE idp=? AND date>? ORDER BY date ASC LIMIT 1',
-                          (idp, '%s0801' % date.today().year))
+                compra = db.simple_query(
+                    'SELECT date,price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' %
+                    (idp, '%s0801' % date.today().year))
 
             precio_compra = float(compra[1])
             # Calculamos la rentabilidad y configuramos el color
@@ -295,11 +296,11 @@ def colorize_rentability(rent):
     color = WHITE
     if rent <= -10:
         color = RED
-    elif rent > -10 and rent < 0:
+    elif rent < 0:
         color = YELLOW
-    elif rent > 0 and rent < 10:
+    elif rent < 10:
         color = CYAN
-    elif rent >= 10:
+    else:
         color = GREEN
 
     return '%s%4d%%%s' % (color, rent, ENDC)
@@ -328,12 +329,12 @@ def write_user_players(myid, username):
     Guarda en base de datos los futbolistas del usuario.
     """
     info_user = com.info_user(myid)
-    db.commit_query('INSERT OR REPLACE INTO users (idu, name) VALUES (?, ?)', (myid, username))
+    db.commit_query('INSERT OR REPLACE INTO users (idu, name) VALUES (%s, %s)' % (myid, username))
     result = []
     for dato in info_user[6:]:
         player_name = dato[1].strip()
         idp = com.info_player_id(player_name)
-        db.commit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (?,?,?)', (idp, player_name, myid))
+        db.commit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)' % (idp, player_name, myid))
         result.append([idp, player_name])
 
     return sorted(result, key=itemgetter(1))
@@ -344,10 +345,13 @@ def write_prices_player(player, idp=None):
     if days == 0:
         # Devolvemos las barras desde la fecha de compra, si no lo hemos comprado devolvemos todas las barras
         barras = db.simple_query(
-            'SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=? AND p.date>=(SELECT t.date FROM transactions t WHERE t.idp=? AND t.type="Buy" ORDER BY t.date DESC LIMIT 1) ORDER BY p.date ASC',
-            (idp, idp))
+            'SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=%s \
+             AND p.date>=(SELECT t.date FROM transactions t \
+                          WHERE t.idp=%s AND t.type="Buy" ORDER BY t.date DESC LIMIT 1) \
+             ORDER BY p.date ASC' % (idp, idp))
         if len(barras) == 0:
-            barras = db.simple_query('SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=? ORDER BY p.date ASC', (idp,))
+            barras = db.simple_query('SELECT p.idp,p.date,p.price FROM prices p \
+                                      WHERE p.idp=%s ORDER BY p.date ASC' % idp)
         return barras
 
     to_insert = list()
@@ -364,13 +368,15 @@ def write_prices_player(player, idp=None):
         for index in range(days):
             to_insert.append((idp, dates[index], prices[index]))
 
-    db.many_commit_query('INSERT OR IGNORE INTO prices (idp,date,price) VALUES (?,?,?)', to_insert)
+    db.many_commit_query('INSERT OR IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
     # Devolvemos las barras desde la fecha de compra, si no lo hemos comprado devolvemos todas las barras
     barras = db.simple_query(
-        'SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=? AND p.date>=(SELECT t.date FROM transactions t WHERE t.idp=? AND t.type="Buy" ORDER BY t.date DESC LIMIT 1) ORDER BY p.date ASC',
-        (idp, idp,))
+        'SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=%s \
+         AND p.date>=(SELECT t.date FROM transactions t \
+                      WHERE t.idp=%s AND t.type="Buy" ORDER BY t.date DESC LIMIT 1) \
+         ORDER BY p.date ASC' % (idp, idp))
     if len(barras) == 0:
-        barras = db.simple_query('SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=? ORDER BY p.date ASC', (idp,))
+        barras = db.simple_query('SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=%s ORDER BY p.date ASC' % idp)
     return barras
 
 
@@ -380,10 +386,10 @@ def write_new_player(player):
     @return: idp
     """
     idp = com.info_player_id(player)
-    rows = db.rowcount('SELECT count(*) FROM players WHERE idp=? AND name=?', (idp, player))
+    rows = db.rowcount('SELECT count(*) FROM players WHERE idp=%s AND name=%s' % (idp, player))
     if not rows:
         try:
-            db.commit_query('INSERT OR IGNORE INTO players (idp,name) VALUES (?,?)', (idp, player))
+            db.commit_query('INSERT OR IGNORE INTO players (idp,name) VALUES (%s,%s)' % (idp, player))
         except:
             print 'No se ha podido guardar al jugador %s-%s' % (idp, player)
     return idp
@@ -394,7 +400,7 @@ def current_player_price(player_name):
     return info_player[5].replace(".", "")
 
 
-def player_prices(name):
+def player_prices(name, prices=0):
     """
     Get prices from a player
     @return: [dates],[data]
@@ -430,15 +436,15 @@ def check_buy(name, min_price, mkt_price):
     write_prices_player(name)
     from_date = (date.today() - timedelta(days=5)).strftime('%Y%m%d')
     rows = db.simple_query(
-        'SELECT pr.price,pr.date FROM prices pr,players pl WHERE pl.idp=pr.idp AND pl.name=? AND pr.date>? ORDER BY pr.date ASC',
-        (name, from_date,))
-    maxH = 0
+        'SELECT pr.price,pr.date FROM prices pr,players pl \
+         WHERE pl.idp=pr.idp AND pl.name=%s AND pr.date>%s ORDER BY pr.date ASC' % (name, from_date))
+    max_h = 0
     fecha = '19700101'
     for row in rows:
-        if row[0] > maxH:
+        if row[0] > max_h:
             maxH = row[0]
             fecha = row[1]
-    # Si la fecha a la que ha llegado es la de hoy (maxH) y el precio que solicitan no es superior al de mercado+10%, se compra
+    # Si la fecha a la que ha llegado es la de hoy (max_h) y el precio que solicitan no es superior al de mercado+10%, se compra
     if fecha == date.today().strftime('%Y%m%d') and min_price < (mkt_price * 1.2):
         return True
     else:
@@ -463,8 +469,9 @@ def translate_dates(dates):
         if dat[6:] != '':
             # Cuando se recuperan fechas de Comuniazo
             month = \
-            {'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04', 'mayo': '05', 'junio': '06', 'julio': '07',
-             'agosto': '08', 'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'}[dat[6:]]
+                {'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+                 'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+                 'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'}[dat[6:]]
         else:
             # Fechas de Comunio
             month = dat[3:5]
