@@ -63,4 +63,4 @@ target/
 
 # My own excludes
 *.conf
-
+.idea/
