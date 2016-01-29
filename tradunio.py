@@ -7,7 +7,7 @@ Created on Oct 21, 2014
 
 # TODO: Init function for the database (clubs, users, and transactions)
 # TODO: Create object user
-# TODO: Make a function inserting players, points, prices, so on
+# TODO: Refactoring: Make functions inserting players, points, prices, so on
 
 
 import argparse
@@ -65,28 +65,32 @@ def main():
     sleep(1)
 
     if args.init:
-        # TODO: Check money from comuniazo
         community_info = com.info_community()
-        today = date.today()
         print '\nInitializing the database...'
         if db.rowcount('SELECT * FROM users'):
-            res = raw_input('\nDatabase contains data, do you want to remove it and load data again? (y/n)')
+            res = raw_input('\nDatabase contains data, %sdo you want to remove%s it and load data again? (y/n) ' % (RED, ENDC))
             if res == 'y':
                 db.commit_query('SET FOREIGN_KEY_CHECKS=0;')
                 queries = db.simple_query('SELECT Concat("DELETE FROM ",table_schema,".",TABLE_NAME, " WHERE 1;") \
                     FROM INFORMATION_SCHEMA.TABLES WHERE table_schema in ("tradunio");')
                 for query in queries:
+                    print query[0] + '...',
                     db.commit_query(query[0])
+                    print "done"
                 db.commit_query('SET FOREIGN_KEY_CHECKS=1;')
             else:
                 exit(0)
 
+        community_info = com.info_community()
+        today = date.today()
         for user in community_info:
-            [user_name, user_id, points, teamvalue, money] = user
+            [user_name, user_id, points, teamvalue, money, max_bid] = user
             if user_id == com.get_myid():
                 money = com.get_money()
+            print '\nLoading %s data...' % user_name,
             db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
-            db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue) VALUES (%s, "%s", %s, %s, %s)' % (user_id, today, points, money, teamvalue))
+            db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, max_bid) \
+                VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, max_bid))
 
             user_info = com.user_players(user_id)
             for player in user_info[2:]:
@@ -94,7 +98,7 @@ def main():
                 db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
                 db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (player_id, name, position, club_id))
                 db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
-
+            print 'done',
         db.commit()
 
     if args.update or args.all:
