@@ -5,11 +5,9 @@ Created on Oct 21, 2014
 @author: jotacor
 """
 
-# TODO: Recoger únicamente un año de histórico, no hace falta almacenar más
-# TODO: función limpieza de base de datos
-# TODO: crear función my_players en ComunioPy por
-# TODO: Acumular en ComunioPy los precios y jugadores consultados en objetos, por si queremos volver a consultarlos
-# TODO: Introducir Buy por cada jugador que nos dé la máquina para cuando lo vendamos poder calcular la rentabilidad
+# TODO: Init function for the database (clubs, users, and transactions)
+# TODO: Create object user
+# TODO: Make a function inserting players, points, prices, so on
 
 
 import argparse
@@ -23,6 +21,7 @@ import re
 import requests
 from tabulate import tabulate
 from time import sleep
+import warnings
 
 BLUE = '\033[94m'
 CYAN = '\033[96m'
@@ -39,28 +38,64 @@ config = ConfigParser()
 config.read('config.conf')
 user = config.get('comunio', 'user')
 passwd = config.get('comunio', 'passwd')
-user_id = config.get('comunio', 'user_id')
-community_id = config.get('comunio', 'community_id')
+user_id = config.getint('comunio', 'user_id')
+community_id = config.getint('comunio', 'community_id')
 com = Comunio(user, passwd, user_id, community_id, 'BBVA')
 
-locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+
+#locale.setlocale(locale.LC_ALL, 'en_US.utf8')
 
 
 def main():
     parser = argparse.ArgumentParser(description='Calcula cuando debes vender o comprar un jugador del Comunio.')
-    parser.add_argument('-a', '--all', action='store_true', dest='all', help='Realiza una ejecución completa.')
-    parser.add_argument('-v', '--vender', action='store_true', dest='vender', help='Muestra los jugadores a vender.')
+    parser.add_argument('-a', '--all', action='store_true', dest='all',
+                        help='Realiza una ejecución completa.')
+    parser.add_argument('-v', '--vender', action='store_true', dest='vender',
+                        help='Muestra los jugadores a vender.')
     parser.add_argument('-c', '--comprar', action='store_true', dest='comprar',
                         help='Muestra los jugadores que tienes que comprar.')
     parser.add_argument('-t', '--trans', action='store_true', dest='trans',
                         help='Descarga de comunio las transacciones y las guarda en base de datos.')
     parser.add_argument('-u', '--update', action='store_true', dest='update',
                         help='Actualiza todos los datos de usuario y sus jugadores en la base de datos.')
+    parser.add_argument('-i', '--init', action='store_true', dest='init',
+                        help='Initialize the database with users, clubs, transactions.')
     args = parser.parse_args()
 
     sleep(1)
 
-    com.get_myid()
+    if args.init:
+        # TODO: Check money from comuniazo
+        community_info = com.info_community()
+        today = date.today()
+        print '\nInitializing the database...'
+        if db.rowcount('SELECT * FROM users'):
+            res = raw_input('\nDatabase contains data, do you want to remove it and load data again? (y/n)')
+            if res == 'y':
+                db.commit_query('SET FOREIGN_KEY_CHECKS=0;')
+                queries = db.simple_query('SELECT Concat("DELETE FROM ",table_schema,".",TABLE_NAME, " WHERE 1;") \
+                    FROM INFORMATION_SCHEMA.TABLES WHERE table_schema in ("tradunio");')
+                for query in queries:
+                    db.commit_query(query[0])
+                db.commit_query('SET FOREIGN_KEY_CHECKS=1;')
+            else:
+                exit(0)
+
+        for user in community_info:
+            [user_name, user_id, points, teamvalue, money] = user
+            if user_id == com.get_myid():
+                money = com.get_money()
+            db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
+            db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue) VALUES (%s, "%s", %s, %s, %s)' % (user_id, today, points, money, teamvalue))
+
+            user_info = com.user_players(user_id)
+            for player in user_info[2:]:
+                [player_id, name, club_name, club_id, value, points, position] = player
+                db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
+                db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (player_id, name, position, club_id))
+                db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
+
+        db.commit()
 
     if args.update or args.all:
         print '\n[*] Actualizamos dinero, valor del equipo y guardamos jugadores y sus precios.'
