@@ -3,6 +3,7 @@
 
 import MySQLdb
 import ConfigParser
+import warnings
 
 db_name = 'db_tradunio'
 
@@ -19,6 +20,7 @@ db = MySQLdb.connect(
     charset=Config.get(db_name, 'charset')
 )
 cursor = db.cursor()
+warnings.filterwarnings('ignore', category=MySQLdb.Warning)
 
 
 def simple_query(sql):
