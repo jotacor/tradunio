@@ -39,7 +39,9 @@ config = ConfigParser()
 config.read('config.conf')
 user = config.get('comunio', 'user')
 passwd = config.get('comunio', 'passwd')
-com = Comunio(user, passwd, 'BBVA')
+user_id = config.get('comunio', 'user_id')
+community_id = config.get('comunio', 'community_id')
+com = Comunio(user, passwd, user_id, community_id, 'BBVA')
 
 locale.setlocale(locale.LC_ALL, 'en_US.utf8')
 
@@ -57,12 +59,8 @@ def main():
     args = parser.parse_args()
 
     sleep(1)
-    try:
-        com.get_myid()
-    except:
-        com.myid = '10170858'
-        com.community_id = '2867202'
-        com.username = 'jotacor'
+
+    com.get_myid()
 
     if args.update or args.all:
         print '\n[*] Actualizamos dinero, valor del equipo y guardamos jugadores y sus precios.'
@@ -99,8 +97,7 @@ def main():
             mkt_price = float(player[3])
             owner = player[6]
             last_points = db.simple_query(
-                'SELECT p.points,g.gameday FROM players pl INNER JOIN points p ON p.idp=pl.idp INNER JOIN gamedays g ON p.idg=g.idg AND pl.name="%s" ORDER BY cast(g.gameday as unsigned) ASC' % name)[
-                          -5:]
+                'SELECT p.points,p.gameday FROM players pl INNER JOIN points p ON p.idp=pl.idp AND pl.name="%s" ORDER BY p.gameday ASC' % name)
             racha = sum([int(x[0]) for x in last_points])
             last_points = ['+' + str(x[0]) if x[0] >= 0 else str(x[0]) for x in last_points]
             # comprar = check_buy(name, min_price, mkt_price)

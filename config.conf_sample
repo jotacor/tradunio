@@ -3,6 +3,8 @@
 [comunio]
 user = user
 passwd = passwd
+user_id = user_id
+community_id = community_id
 
 [db_tradunio]
 user = tradunio
