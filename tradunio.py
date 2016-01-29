@@ -14,7 +14,7 @@ import argparse
 import db_tradunio as db
 from ComunioPy import Comunio
 from ConfigParser import ConfigParser
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import locale
 from operator import itemgetter
 import re
@@ -57,15 +57,14 @@ def main():
     parser.add_argument('-t', '--trans', action='store_true', dest='trans',
                         help='Descarga de comunio las transacciones y las guarda en base de datos.')
     parser.add_argument('-u', '--update', action='store_true', dest='update',
-                        help='Actualiza todos los datos de usuario y sus jugadores en la base de datos.')
+                        help='Update all data of all players and users.')
     parser.add_argument('-i', '--init', action='store_true', dest='init',
-                        help='Initialize the database with users, clubs, transactions.')
+                        help='Initialize the database with users, clubs.')
     args = parser.parse_args()
 
     sleep(1)
 
     if args.init:
-        community_info = com.info_community()
         print '\nInitializing the database...'
         if db.rowcount('SELECT * FROM users'):
             res = raw_input('\nDatabase contains data, %sdo you want to remove%s it and load data again? (y/n) ' % (RED, ENDC))
@@ -81,40 +80,23 @@ def main():
             else:
                 exit(0)
 
-        community_info = com.info_community()
-        today = date.today()
-        for user in community_info:
-            [user_name, user_id, points, teamvalue, money, max_bid] = user
-            if user_id == com.get_myid():
-                money = com.get_money()
-            print '\nLoading %s data...' % user_name,
-            db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
-            db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, max_bid) \
-                VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, max_bid))
-
-            user_info = com.user_players(user_id)
-            for player in user_info[2:]:
-                [player_id, name, club_name, club_id, value, points, position] = player
-                db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
-                db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (player_id, name, position, club_id))
-                db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
-            print 'done',
-        db.commit()
+        update_users_data()
 
     if args.update or args.all:
-        print '\n[*] Actualizamos dinero, valor del equipo y guardamos jugadores y sus precios.'
-        money, teamvalue = write_money_teamvalue(com.myid)
-        my_players = write_user_players(com.myid, com.username)
-        for i, player in enumerate(my_players):
-            barras = write_prices_player(idp=player[0], player=player[1])
-            price = float(barras[-1][2])
-            dat = barras[-1][1]
-            my_players[i].extend([price, dat])
+        print '\n[*] Updating money, team value and save players and prices.'
+        users = update_users_data()
+        # exit(0)
+        for user in users:
+            for player in users[user][5]:
+                bars = write_prices_player(idp=player[0], player_name=player[1])
+                price = float(bars[-1][2])
+                dat = bars[-1][1]
+                #my_players[i].extend([price, dat])
 
         headers = ['Player ID', 'Name', 'Mkt price', 'Last date']
         print 'Valor del equipo: %s € - Dinero: %s €' % (
             locale.format("%d", teamvalue, grouping=True), locale.format("%d", money, grouping=True))
-        print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
+        #print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
         clean_players()
 
     if args.trans or args.all:
@@ -160,6 +142,29 @@ def main():
 
     com.logout()
 
+def update_users_data():
+    community_info = com.info_community()
+    today = date.today()
+    info = dict()
+    for user in community_info:
+        [user_name, user_id, points, teamvalue, money, max_bid] = user
+        if user_id == com.get_myid():
+            money = com.get_money()
+        print '\nLoading %s data...' % user_name,
+        db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
+        db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, max_bid) \
+            VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, max_bid))
+
+        user_info = com.user_players(user_id)
+        for player in user_info[2:]:
+            [player_id, name, club_name, club_id, value, points, position] = player
+            db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
+            db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (player_id, name, position, club_id))
+            db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
+        print 'done',
+        info[user_id] = [user_name, points, teamvalue, money, max_bid, user_info[2:]]
+    db.commit()
+    return info
 
 def clean_players():
     # Para esto añadir fecha 'added' a los jugadores de la base de datos y borrar los anteriores a 1 mes y que no estén en cartera
@@ -243,19 +248,19 @@ def check_sell(my_players):
     return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
 
 
-def write_money_teamvalue(idp):
-    """
-    Escribe en base de datos el valor del equipo y el dinero que poseemos.
-    """
-    hoy = date.today().strftime('%Y%m%d')
-    money = com.get_money()
-    db.nocommit_query('INSERT IGNORE INTO money (idu,date,money) VALUES (%s,%s,%s)' % (idp, hoy, money))
-
-    value = com.get_team_value()
-    db.nocommit_query('INSERT IGNORE INTO teamvalue (idu,date,value) VALUES (%s,%s,%s)' % (idp, hoy, value))
-
-    db.commit()
-    return money, value
+# def write_money_teamvalue(idp):
+#     """
+#     Escribe en base de datos el valor del equipo y el dinero que poseemos.
+#     """
+#     hoy = date.today().strftime('%Y%m%d')
+#     money = com.get_money()
+#     db.nocommit_query('INSERT IGNORE INTO money (idu,date,money) VALUES (%s,%s,%s)' % (idp, hoy, money))
+#
+#     value = com.get_team_value()
+#     db.nocommit_query('INSERT IGNORE INTO teamvalue (idu,date,value) VALUES (%s,%s,%s)' % (idp, hoy, value))
+#
+#     db.commit()
+#     return money, value
 
 
 def write_transactions(myid):
@@ -342,43 +347,40 @@ def colorize_rentability(rent):
     return '%s%4d%%%s' % (color, rent, ENDC)
 
 
-def _days_wo_price(player):
+def _days_wo_price(idp):
     """
     Devuelve la cantidad de días que lleva un jugador sin actualizarse en la base de datos.
     """
-    idp = com.info_player_id(player)
-    max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % idp)
+    max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % idp)[0][0]
     res = 365
-    for last_date in max_date:
-        try:
-            a = date(int(last_date[:4]), int(last_date[4:6]), int(last_date[6:8]))
-        except:
-            continue
-        res = (date.today() - a).days
-        if res > 365:
-            res = 365
+    try:
+        res = (date.today() - max_date).days
+    except:
+        pass
+    if res > 365:
+        res = 365
     return res
 
 
-def write_user_players(myid, username):
-    """
-    Guarda en base de datos los futbolistas del usuario.
-    """
-    info_user = com.info_user(myid)
-    db.commit_query('INSERT OR REPLACE INTO users (idu, name) VALUES (%s, %s)' % (myid, username))
-    result = []
-    for dato in info_user[6:]:
-        player_name = dato[1].strip()
-        idp = com.info_player_id(player_name)
-        db.commit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)' % (idp, player_name, myid))
-        result.append([idp, player_name])
+# def write_user_players(myid, username):
+#     """
+#     Guarda en base de datos los futbolistas del usuario.
+#     """
+#     info_user = com.info_user(myid)
+#     db.commit_query('INSERT OR REPLACE INTO users (idu, name) VALUES (%s, %s)' % (myid, username))
+#     result = []
+#     for dato in info_user[6:]:
+#         player_name = dato[1].strip()
+#         idp = com.info_player_id(player_name)
+#         db.commit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)' % (idp, player_name, myid))
+#         result.append([idp, player_name])
+#
+#     return sorted(result, key=itemgetter(1))
 
-    return sorted(result, key=itemgetter(1))
 
-
-def write_prices_player(player, idp=None):
-    days = _days_wo_price(player)
-    if days == 0:
+def get_prices_player(idp):
+    days_left = _days_wo_price(idp)
+    if not days_left:
         # Devolvemos las barras desde la fecha de compra, si no lo hemos comprado devolvemos todas las barras
         barras = db.simple_query(
             'SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=%s \
@@ -390,29 +392,33 @@ def write_prices_player(player, idp=None):
                                       WHERE p.idp=%s ORDER BY p.date ASC' % idp)
         return barras
 
+def write_prices_player(idp, player_name):
+    days_left = _days_wo_price(idp)
     to_insert = list()
-    if not idp:
-        idp = write_new_player(player)
-    dates, prices = player_prices(player)
+    dates, prices = player_prices(player_name)
     dates = translate_dates(dates)
 
     if len(dates) != len(prices):
         print "Los arrays de precios y de fechas no tienen el mismo tamaño."
     else:
-        if days == 365:
-            days = len(dates)
-        for index in range(days):
-            to_insert.append((idp, dates[index], prices[index]))
+        if days_left == 365:
+            days_left = len(dates)
+        for index in range(days_left):
+            p_date = datetime.strptime(dates[index], "%Y-%m-%d").date()
+            price = prices[index]
+            if price != 'null':
+                price = int(prices[index])
+            to_insert.append((idp, p_date, price))
 
-    db.many_commit_query('INSERT OR IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
+    db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
     # Devolvemos las barras desde la fecha de compra, si no lo hemos comprado devolvemos todas las barras
     barras = db.simple_query(
         'SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=%s \
          AND p.date>=(SELECT t.date FROM transactions t \
                       WHERE t.idp=%s AND t.type="Buy" ORDER BY t.date DESC LIMIT 1) \
          ORDER BY p.date ASC' % (idp, idp))
-    if len(barras) == 0:
-        barras = db.simple_query('SELECT p.idp,p.date,p.price FROM prices p WHERE p.idp=%s ORDER BY p.date ASC' % idp)
+    if not barras:
+        barras = db.simple_query('SELECT idp,date,price FROM prices WHERE idp=%s ORDER BY date ASC' % idp)
     return barras
 
 
@@ -515,7 +521,7 @@ def translate_dates(dates):
         if month + day == '0101':
             last = 1
 
-        ret.append(year + month + day)
+        ret.append('%s-%s-%s' % (year, month, day))
     return ret
 
 
