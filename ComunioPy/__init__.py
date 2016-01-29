@@ -3,6 +3,7 @@
 
 from bs4 import BeautifulSoup
 from datetime import date as dt
+import json
 import os
 import re
 import requests
@@ -114,15 +115,16 @@ class Comunio:
 
     def user_players(self, userid):
         """Get user info using a ID
-        @:return [username, points,[[player_id, name, club, value, points, position],]]
+        @return: [username, points,[[player_id, name, club, value, points, position],]]
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + str(userid), headers=headers).content
+        req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + str(userid),
+                               headers=headers).content
         soup = BeautifulSoup(req)
         title = soup.title.string
         community = soup.find_all('table', border=0)[1].a.text
-        username = re.search('\((.*?)\)',soup.find('div', id='title').text).group(1)
+        username = re.search('\((.*?)\)', soup.find('div', id='title').text).group(1)
         try:
             points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[1].text)[0]
         except IndexError:
@@ -154,21 +156,32 @@ class Comunio:
     def info_community(self):
         """
         Get comunity info using a ID
-        @return: [[user_name, user_id, user_points, team_value],]
+        @return: [[user_name, user_id, user_points, team_value, money, max_bid],]
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(self.community_id),
-                               headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(self.community_id),
+                                              headers=headers).content)
+
+        headers_zo = {'Accept': '*/*', 'Referer': 'http://www.comuniazo.com/comunio/dinero',
+                      'Host': 'www.comuniazo.com', 'X-Requested-With': 'XMLHttpRequest'}
+        money = requests.session()
+        money.get('http://www.comuniazo.com/comunio/dinero', headers=headers_zo)
+        money_bids = json.loads(money.get('http://www.comuniazo.com/ajax/dinero.php?user=%s&dinero=20000000' % self.username,
+                                          headers=headers_zo).content)
+
         info = list()
-        money = 0
+        money, max_bid = [0, 0]
         for row in soup.find('table', cellpadding=2).find_all('tr')[1:]:
-            info.append([row.a.text,
-                         int(row.find('a')['href'].split('pid=')[1]),
-                         int(row.find_all('td')[3].text),
-                         int(row.find_all('td')[4].text.replace('.', '')),
-                         money])
+            user_name = row.a.text
+            user_id = row.find('a')['href'].split('pid=')[1]
+            user_points = int(row.find_all('td')[3].text)
+            team_value = int(row.find_all('td')[4].text.replace('.', ''))
+            for user in money_bids['lista']['players']:
+                if user['id'] == user_id:
+                    money = int(user['dinero'].replace('.', ''))
+                    max_bid = int(user['puja'].replace('.', ''))
+            info.append([user_name, int(user_id), user_points, team_value, money, max_bid])
         return info
 
     def info_player(self, pid):
@@ -259,7 +272,8 @@ class Comunio:
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(community_id), headers=headers).content
+        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(community_id),
+                               headers=headers).content
         soup = BeautifulSoup(req)
 
         current_year = dt.today().year
