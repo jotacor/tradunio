@@ -171,8 +171,8 @@ class Comunio:
                                           headers=headers_zo).content)
 
         info = list()
-        money, max_bid = [0, 0]
         for row in soup.find('table', cellpadding=2).find_all('tr')[1:]:
+            money, max_bid = [0, 0]
             user_name = row.a.text
             user_id = row.find('a')['href'].split('pid=')[1]
             user_points = int(row.find_all('td')[3].text)
