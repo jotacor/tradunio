@@ -26,11 +26,11 @@ class Comunio:
         self.password = password
         self.domain = Leagues[league]
         self.session = requests.session()
-        self.title = None
         self.myid = user_id
         self.money = None
         self.teamvalue = None
         self.community_id = community_id
+        self.logged = None
         self.login()
 
     def login(self):
@@ -52,7 +52,6 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
         soup = BeautifulSoup(req)
-        self.title = soup.title.string
 
         estado = soup.find('div', {'id': 'content'}).find('div', {'id': 'manager'}).string
         if estado:
@@ -61,10 +60,10 @@ class Comunio:
 
         [s.extract() for s in soup('strong')]
         if soup.find('div', {'id': 'userid'}) is not None:
-            self.myid = soup.find('div', {'id': 'userid'}).p.text.strip()[2:]
+            self.myid = int(soup.find('div', {'id': 'userid'}).p.text.strip()[2:])
             self.money = int(soup.find('div', {'id': 'manager_money'}).p.text.strip().replace(".", "")[:-2])
             self.teamvalue = int(soup.find('div', {'id': 'teamvalue'}).p.text.strip().replace(".", "")[:-2])
-            self.community_id = soup.find('link')['href'][24:]
+            self.community_id = int(soup.find('link')['href'][24:])
             # self.username = soup.find('div', {'id': 'username'}).p.a.text
 
     def get_money(self):
@@ -79,10 +78,6 @@ class Comunio:
         """Get my id"""
         return self.myid
 
-    def get_title(self):
-        """Title of the webpage"""
-        return self.title
-
     def get_username(self):
         """Name of the user"""
         return self.username
@@ -93,7 +88,7 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
         soup = BeautifulSoup(req)
-        news = []
+        news = list()
         for i in soup.find_all('div', {'class', 'article_content_text'}):
             news.append(i.text)
         return news
@@ -111,32 +106,38 @@ class Comunio:
         req = self.session.get('http://' + self.domain + '/standings.phtml', headers=headers).content
         soup = BeautifulSoup(req)
         table = soup.find('table', {'id': 'tablestandings'}).find_all('tr')
-        clasificacion = []
+        clasificacion = list()
         [clasificacion.append('%s\t%s\t%s\t%s\t%s' % (
             tablas.find('td').text, tablas.find('div')['id'], tablas.a.text, tablas.find_all('td')[3].text,
             tablas.find_all('td')[4].text)) for tablas in table[1:]]
         return clasificacion
 
-    def info_user(self, userid):
-        """Get user info using a ID"""
+    def user_players(self, userid):
+        """Get user info using a ID
+        @:return [username, points,[[player_id, name, club, value, points, position],]]
+        """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + userid, headers=headers).content
+        req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + str(userid), headers=headers).content
         soup = BeautifulSoup(req)
         title = soup.title.string
         community = soup.find_all('table', border=0)[1].a.text
-        info = [title, community]
-        for i in soup.find_all('table', border=0)[1].find_all('td')[1:]:
-            info.append(i.text)
+        username = re.search('\((.*?)\)',soup.find('div', id='title').text).group(1)
+        try:
+            points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[1].text)[0]
+        except IndexError:
+            points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[2].text)[0]
+        info = [username, points]
         for i in soup.find('table', cellpadding=2).find_all('tr')[1:]:
             cad = i.find_all('td')
-            numero = cad[0].text
-            nombre = cad[2].text.strip()
-            team = cad[3].find('img')['alt']
-            precio = cad[4].text.replace(".", "")
-            puntos = cad[5].text
-            posicion = cad[6].text
-            info.append([numero, nombre, team, precio, puntos, posicion])
+            player_id = int(re.findall('\d+', i.find_all('img')[0]['src'])[0])
+            name = cad[2].text.strip()
+            club = cad[3].find('img')['alt']
+            club_id = int(re.findall('\d+', i.find_all('img')[1]['src'])[0])
+            value = cad[4].text.replace(".", "")
+            points = cad[5].text
+            position = cad[6].text
+            info.append([player_id, name, club, club_id, value, points, position])
         return info
 
     def lineup_user(self, userid):
@@ -145,22 +146,29 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + userid, headers=headers).content
         soup = BeautifulSoup(req)
-        info = []
+        info = list()
         for i in soup.find_all('td', {'class': 'name_cont'}):
             info.append(i.text.strip())
         return info
 
-    def info_community(self, teamid):
-        """Get comunity info using a ID"""
+    def info_community(self):
+        """
+        Get comunity info using a ID
+        @return: [[user_name, user_id, user_points, team_value],]
+        """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + teamid, headers=headers).content
+        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(self.community_id),
+                               headers=headers).content
         soup = BeautifulSoup(req)
-        info = []
-        for i in soup.find('table', cellpadding=2).find_all('tr')[1:]:
-            info.append('%s\t%s\t%s\t%s\t%s' % (
-                i.find('td').text, i.find('a')['href'].split('pid=')[1], i.a.text, i.find_all('td')[2].text,
-                i.find_all('td')[3].text))
+        info = list()
+        money = 0
+        for row in soup.find('table', cellpadding=2).find_all('tr')[1:]:
+            info.append([row.a.text,
+                         int(row.find('a')['href'].split('pid=')[1]),
+                         int(row.find_all('td')[3].text),
+                         int(row.find_all('td')[4].text.replace('.', '')),
+                         money])
         return info
 
     def info_player(self, pid):
@@ -190,7 +198,7 @@ class Comunio:
             break  # Solo devuelve la primera coincidencia
         return number
 
-    def club(self, cid):
+    def club_info(self, cid):
         """
         Get info by real team using a ID
         @return: name,[player list]
@@ -199,17 +207,18 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/clubInfo.phtml?cid=' + cid, headers=headers).content
         soup = BeautifulSoup(req)
-        plist = []
+        plist = list()
         for i in soup.find('table', cellpadding=2).find_all('tr')[1:]:
             plist.append('%s\t%s\t%s\t%s\t%s' % (
                 i.find_all('td')[0].text, i.find_all('td')[1].text, i.find_all('td')[2].text, i.find_all('td')[3].text,
                 i.find_all('td')[4].text))
         return soup.title.text, plist
 
-    def team_id(self, team):
+    def club_id(self, club_name):
         """
         Get team ID using a real team name
-        @return: id
+        @param club_name: Name of the real club.
+        @return id
         """
         # UTF-8 comparison
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
@@ -220,9 +229,9 @@ class Comunio:
             # Get teamid from the bets
             team1 = i.find('a')['title']
             team2 = i.find_all('a')[1]['title']
-            if team == team1:
+            if club_name == team1:
                 return i.find('a')['href'].split('cid=')[1]
-            elif team == team2:
+            elif club_name == team2:
                 return i.find_all('a')[1]['href'].split('cid=')[1]
         return None
 
@@ -250,12 +259,12 @@ class Comunio:
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + community_id, headers=headers).content
+        req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(community_id), headers=headers).content
         soup = BeautifulSoup(req)
 
         current_year = dt.today().year
         current_month = dt.today().month
-        on_sale = []
+        on_sale = list()
         year_flag = 0
         for i in soup.find_all('table', {'class', 'tablecontent03'})[2].find_all('tr')[1:]:
             name = i.find_all('td')[0].text.strip()
@@ -284,7 +293,7 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/exchangemarket.phtml?viewoffers_x=', headers=headers).content
         soup = BeautifulSoup(req)
-        table = []
+        table = list()
         for i in soup.find('table', {'class', 'tablecontent03'}).find_all('tr')[1:]:
             player, owner, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
             table.append([player, owner, team, price, bid_date, trans_date, status])
@@ -300,7 +309,7 @@ class Comunio:
         req = self.session.get('http://' + self.domain + '/exchangemarket.phtml?viewoffers_x=', headers=headers).content
         # secondpage = 'http://www.comunio.es/exchangemarket.phtml?viewoffers_x=34&sort=&sortAsc=&tbl=&1277428601_total=14&1277428601_listmin=10'
         soup = BeautifulSoup(req)
-        table = []
+        table = list()
         for i in soup.find_all('table', {'class', 'tablecontent03'})[1].find_all('tr')[1:]:
             player, owner, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
             table.append([player, owner, team, price, bid_date, trans_date, status])
