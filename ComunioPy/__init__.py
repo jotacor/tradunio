@@ -139,7 +139,7 @@ class Comunio:
             value = cad[4].text.replace(".", "")
             points = cad[5].text
             position = cad[6].text
-            info.append([player_id, name, club, club_id, value, points, position])
+            info.append([player_id, name, club_id, club, value, points, position])
         return info
 
     def lineup_user(self, userid):

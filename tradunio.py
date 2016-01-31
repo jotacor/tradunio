@@ -16,13 +16,11 @@ import db_tradunio as db
 from ComunioPy import Comunio
 from ConfigParser import ConfigParser
 from datetime import date, timedelta, datetime
-import locale
 from operator import itemgetter
 import re
 import requests
 from tabulate import tabulate
 from time import sleep
-import warnings
 
 BLUE = '\033[94m'
 CYAN = '\033[96m'
@@ -37,15 +35,12 @@ FILTRO_STOP = 0.05
 
 config = ConfigParser()
 config.read('config.conf')
-user = config.get('comunio', 'user')
-passwd = config.get('comunio', 'passwd')
-user_id = config.getint('comunio', 'user_id')
+c_user = config.get('comunio', 'user')
+c_passwd = config.get('comunio', 'passwd')
+c_user_id = config.getint('comunio', 'user_id')
 community_id = config.getint('comunio', 'community_id')
-com = Comunio(user, passwd, user_id, community_id, 'BBVA')
-
-
-# locale.setlocale(locale.LC_ALL, 'en_US.utf8')
-
+com = Comunio(c_user, c_passwd, c_user_id, community_id, 'BBVA')
+today = date.today()
 
 def main():
     parser = argparse.ArgumentParser(description='Calcula cuando debes vender o comprar un jugador del Comunio.')
@@ -82,28 +77,27 @@ def main():
             else:
                 exit(0)
 
-        update_users_data()
+        set_users_data()
 
     if args.update or args.all:
         print '\n[*] Updating money, team value and save players and prices.'
-        users = update_users_data()
+        users = get_users_data()
         # exit(0)
         for user in users:
             if user != com.get_myid():
                 continue
             my_players = list()
             username, points, teamvalue, money, max_bid = users[user][0:5]
-            for player in users[user][5]:
-                bars = write_prices_player(idp=player[0], player_name=player[1])
-                # price = float(bars[-1][2])
+            for player in users[user][5:]:
+                idp, playername, clubname, club_id, value, points, position = player
+                bars = write_prices_player(idp=idp, player_name=playername)
                 dat = bars[-1][1]
-                to_copy = list(player)
-                to_copy.append(dat.isoformat())
+                to_copy = [idp, playername, clubname, club_id, int(value), points, position, dat.isoformat()]
                 my_players.append(to_copy)
             print '\n%s:' % username
             print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
                 format(teamvalue, ",d"), format(money, ",d"), format(max_bid, ",d"), points)
-            headers = ['Player ID', 'Name', 'Club', 'Club ID', 'Points', 'Position', 'Last date']
+            headers = ['Player ID', 'Name', 'Club', 'Club ID', 'Value', 'Points', 'Position', 'Last date']
             print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
             clean_players()
 
@@ -142,8 +136,8 @@ def main():
     if args.vender or args.all:
         sleep(1)
         print '\n[*] Jugadores que hay que vender:'
-        # my_players = write_user_players(com.myid, 'Javi')
-        # table = check_sell(my_players)
+        #my_players = write_user_players(com.myid, 'Javi')
+        #table = check_sell(my_players)
         headers = ['Player ID', 'Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Rent']
         print tabulate(table, headers, tablefmt="rst", numalign="right", floatfmt=",.0f")
         print '#################################################'
@@ -151,14 +145,35 @@ def main():
     com.logout()
 
 
-def update_users_data():
-    community_info = com.info_community()
-    today = date.today()
+def get_users_data():
     info = dict()
+    last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
+    if last_date == today:
+        users = db.simple_query('SELECT u.idu,u.name,d.date,d.points,d.money,d.teamvalue,d.max_bid \
+                        FROM users u, user_data d WHERE u.idu=d.idu AND date = "%s"' % last_date)
+        for user in users:
+            user_id, username, date, points, money, teamvalue, max_bid = user
+            # TODO: Use INNER JOIN
+            players = db.simple_query('SELECT p.idp,p.name,c.idcl,c.name,pr.price,0,p.position \
+                                      FROM players p, clubs c, owners o, prices pr \
+                                      WHERE p.idcl=c.idcl AND o.idp=p.idp \
+                                      AND pr.idp=p.idp AND o.idu=%s' % user_id)
+            info[user_id] = [username, points, teamvalue, money, max_bid]
+            for player in players:
+                player_id, name, club_id, clubname, value, points, position = player
+                info[user_id].append(player)
+    else:
+        info = set_users_data()
+
+    return info
+
+
+def set_users_data():
+    info = dict()
+    today = date.today()
+    community_info = com.info_community()
     for user in community_info:
         [user_name, user_id, points, teamvalue, money, max_bid] = user
-        if user_id == com.get_myid():
-            money = com.get_money()
         print '\nLoading %s data...' % user_name,
         db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
         db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, max_bid) \
@@ -166,7 +181,7 @@ def update_users_data():
 
         user_info = com.user_players(user_id)
         for player in user_info[2:]:
-            [player_id, name, club_name, club_id, value, points, position] = player
+            [player_id, name, club_id, club_name, value, points, position] = player
             db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
             db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (
                 player_id, name, position, club_id))
@@ -407,7 +422,7 @@ def get_prices_player(idp):
 def write_prices_player(idp, player_name):
     days_left = _days_wo_price(idp)
     to_insert = list()
-    dates, prices = player_prices(player_name)
+    dates, prices = get_player_prices(player_name)
     dates = translate_dates(dates)
 
     if len(dates) != len(prices):
@@ -455,7 +470,7 @@ def current_player_price(player_name):
     return info_player[5].replace(".", "")
 
 
-def player_prices(name, prices=0):
+def get_player_prices(name, prices=0):
     """
     Get prices from a player
     @return: [dates],[data]
