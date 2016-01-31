@@ -8,6 +8,7 @@ Created on Oct 21, 2014
 # TODO: Init function for the database (clubs, users, and transactions)
 # TODO: Create object user
 # TODO: Refactoring: Make functions inserting players, points, prices, so on
+# TODO: Change position to a number instead the position name (problem with different languages)
 
 
 import argparse
@@ -43,7 +44,7 @@ community_id = config.getint('comunio', 'community_id')
 com = Comunio(user, passwd, user_id, community_id, 'BBVA')
 
 
-#locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+# locale.setlocale(locale.LC_ALL, 'en_US.utf8')
 
 
 def main():
@@ -67,7 +68,8 @@ def main():
     if args.init:
         print '\nInitializing the database...'
         if db.rowcount('SELECT * FROM users'):
-            res = raw_input('\nDatabase contains data, %sdo you want to remove%s it and load data again? (y/n) ' % (RED, ENDC))
+            res = raw_input(
+                '\nDatabase contains data, %sdo you want to remove%s it and load data again? (y/n) ' % (RED, ENDC))
             if res == 'y':
                 db.commit_query('SET FOREIGN_KEY_CHECKS=0;')
                 queries = db.simple_query('SELECT Concat("DELETE FROM ",table_schema,".",TABLE_NAME, " WHERE 1;") \
@@ -87,17 +89,23 @@ def main():
         users = update_users_data()
         # exit(0)
         for user in users:
+            if user != com.get_myid():
+                continue
+            my_players = list()
+            username, points, teamvalue, money, max_bid = users[user][0:5]
             for player in users[user][5]:
                 bars = write_prices_player(idp=player[0], player_name=player[1])
-                price = float(bars[-1][2])
+                # price = float(bars[-1][2])
                 dat = bars[-1][1]
-                #my_players[i].extend([price, dat])
-
-        headers = ['Player ID', 'Name', 'Mkt price', 'Last date']
-        print 'Valor del equipo: %s € - Dinero: %s €' % (
-            locale.format("%d", teamvalue, grouping=True), locale.format("%d", money, grouping=True))
-        #print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
-        clean_players()
+                to_copy = list(player)
+                to_copy.append(dat.isoformat())
+                my_players.append(to_copy)
+            print '\n%s:' % username
+            print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
+                format(teamvalue, ",d"), format(money, ",d"), format(max_bid, ",d"), points)
+            headers = ['Player ID', 'Name', 'Club', 'Club ID', 'Points', 'Position', 'Last date']
+            print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
+            clean_players()
 
     if args.trans or args.all:
         sleep(1)
@@ -134,13 +142,14 @@ def main():
     if args.vender or args.all:
         sleep(1)
         print '\n[*] Jugadores que hay que vender:'
-        my_players = write_user_players(com.myid, 'Javi')
-        table = check_sell(my_players)
+        # my_players = write_user_players(com.myid, 'Javi')
+        # table = check_sell(my_players)
         headers = ['Player ID', 'Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Rent']
         print tabulate(table, headers, tablefmt="rst", numalign="right", floatfmt=",.0f")
         print '#################################################'
 
     com.logout()
+
 
 def update_users_data():
     community_info = com.info_community()
@@ -159,12 +168,14 @@ def update_users_data():
         for player in user_info[2:]:
             [player_id, name, club_name, club_id, value, points, position] = player
             db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
-            db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (player_id, name, position, club_id))
+            db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (
+                player_id, name, position, club_id))
             db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
         print 'done',
         info[user_id] = [user_name, points, teamvalue, money, max_bid, user_info[2:]]
     db.commit()
     return info
+
 
 def clean_players():
     # Para esto añadir fecha 'added' a los jugadores de la base de datos y borrar los anteriores a 1 mes y que no estén en cartera
@@ -392,6 +403,7 @@ def get_prices_player(idp):
                                       WHERE p.idp=%s ORDER BY p.date ASC' % idp)
         return barras
 
+
 def write_prices_player(idp, player_name):
     days_left = _days_wo_price(idp)
     to_insert = list()
@@ -405,9 +417,10 @@ def write_prices_player(idp, player_name):
             days_left = len(dates)
         for index in range(days_left):
             p_date = datetime.strptime(dates[index], "%Y-%m-%d").date()
-            price = prices[index]
-            if price != 'null':
+            try:
                 price = int(prices[index])
+            except:
+                price = 0
             to_insert.append((idp, p_date, price))
 
     db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
@@ -457,6 +470,10 @@ def player_prices(name, prices=0):
     dates = []
     # Existen jugadores como "Cristian Álvarez" que están duplicados, el  primero no tiene datos
     while True and len(dates) < 2:
+        req = session.get(url_jugadores + name.replace(" ", "-").replace(".", "") + sufijo, headers=headers).content
+        dates_re = re.search("(\"[0-9 ][0-9] de \w+\",?,?)+", req)
+        if dates_re is None:
+            sufijo = '-2'
         req = session.get(url_jugadores + name.replace(" ", "-").replace(".", "") + sufijo, headers=headers).content
         dates_re = re.search("(\"[0-9 ][0-9] de \w+\",?,?)+", req)
         dates = dates_re.group(0).replace('"', '').split(",")
