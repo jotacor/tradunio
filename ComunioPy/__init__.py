@@ -3,6 +3,7 @@
 
 from bs4 import BeautifulSoup
 from datetime import date as dt
+from datetime import datetime
 import json
 import os
 import re
@@ -90,8 +91,10 @@ class Comunio:
         req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
         soup = BeautifulSoup(req)
         news = list()
-        for i in soup.find_all('div', {'class', 'article_content_text'}):
-            news.append(i.text)
+        n_date = soup.find_all('span', {'class', 'news_date'})
+        for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})):
+            news_date = datetime.strptime(n_date[index]['title'][0:8], "%d.%m.%y").date()
+            news.append([news_date, i.text])
         return news
 
     def logout(self):
