@@ -91,7 +91,7 @@ def main():
         for user_id in users:
             my_players = list()
             username, points, teamvalue, money, maxbid = users[user_id][0:5]
-            for player in users[user][5]:
+            for player in users[user_id][5]:
                 idp, playername, club_id, clubname, value, points, position = player
                 if club_id == 25:
                     # Player is not in Primera División
@@ -104,7 +104,7 @@ def main():
             set_transactions(user_id)
             remove_sold_players()
 
-            if user != com.get_myid():
+            if user_id != com.get_myid():
                 continue
 
             print '\n%s:' % username
@@ -187,13 +187,13 @@ def set_users_data(uid=None):
     :return: information about the user and his players
     """
     # TODO: check first in database if I already have it all
-    last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
+    last_date_user = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
     news = com.get_news()
     info = dict()
     today = date.today()
     last_news_date = news[1][0]
 
-    if last_news_date != today or last_date == today:
+    if last_news_date != today or last_date_user == today:
         print "No data already computed by Comunio or data up to date."
         info = get_users_data()
     else:
