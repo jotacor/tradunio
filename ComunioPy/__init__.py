@@ -113,8 +113,9 @@ class Comunio:
             tablas.find_all('td')[4].text)) for tablas in table[1:]]
         return clasificacion
 
-    def user_players(self, userid):
+    def get_user_players(self, userid):
         """Get user info using a ID
+        @param userid: Id of the user
         @return: [username, points,[[player_id, name, club, value, points, position],]]
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
@@ -129,7 +130,7 @@ class Comunio:
             points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[1].text)[0]
         except IndexError:
             points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[2].text)[0]
-        info = [username, points]
+        info = list()
         for i in soup.find('table', cellpadding=2).find_all('tr')[1:]:
             cad = i.find_all('td')
             player_id = int(re.findall('\d+', i.find_all('img')[0]['src'])[0])
@@ -153,7 +154,7 @@ class Comunio:
             info.append(i.text.strip())
         return info
 
-    def info_community(self):
+    def get_users_info(self):
         """
         Get comunity info using a ID
         @return: [[user_name, user_id, user_points, team_value, money, max_bid],]
