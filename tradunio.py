@@ -193,7 +193,7 @@ def set_users_data(uid=None):
     today = date.today()
     last_news_date = news[1][0]
 
-    if last_news_date != today or last_date_user == today:
+    if last_news_date < today or last_date_user == today:
         print "No data already computed by Comunio or data up to date."
         info = get_users_data()
     else:
@@ -341,8 +341,6 @@ def set_transactions(user_id):
     for new in news:
         ndate = new[0]
         text = new[1]
-
-
 
 
 def write_transactions(myid):
