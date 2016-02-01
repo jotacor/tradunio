@@ -81,13 +81,15 @@ def main():
 
     if args.update or args.all:
         print '\n[*] Updating money, team value and save players and prices.'
-        users = get_users_data()
+        users = set_users_data()
+        # set_players_data()
+        #users = get_users_data()
         # exit(0)
         for user in users:
             if user != com.get_myid():
                 continue
             my_players = list()
-            username, points, teamvalue, money, max_bid = users[user][0:5]
+            username, points, teamvalue, money, maxbid = users[user][0:5]
             for player in users[user][5:]:
                 idp, playername, clubname, club_id, value, points, position = player
                 bars = write_prices_player(idp=idp, player_name=playername)
@@ -96,7 +98,7 @@ def main():
                 my_players.append(to_copy)
             print '\n%s:' % username
             print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
-                format(teamvalue, ",d"), format(money, ",d"), format(max_bid, ",d"), points)
+                format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
             headers = ['Player ID', 'Name', 'Club', 'Club ID', 'Value', 'Points', 'Position', 'Last date']
             print tabulate(my_players, headers, tablefmt="rst", floatfmt=",.0f")
             clean_players()
@@ -149,47 +151,56 @@ def get_users_data():
     info = dict()
     last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
     if last_date == today:
-        users = db.simple_query('SELECT u.idu,u.name,d.date,d.points,d.money,d.teamvalue,d.max_bid \
+        users = db.simple_query('SELECT u.idu,u.name,d.date,d.points,d.money,d.teamvalue,d.maxbid \
                         FROM users u, user_data d WHERE u.idu=d.idu AND date = "%s"' % last_date)
         for user in users:
-            user_id, username, date, points, money, teamvalue, max_bid = user
+            user_id, username, date, points, money, teamvalue, maxbid = user
             # TODO: Use INNER JOIN
             players = db.simple_query('SELECT p.idp,p.name,c.idcl,c.name,pr.price,0,p.position \
                                       FROM players p, clubs c, owners o, prices pr \
                                       WHERE p.idcl=c.idcl AND o.idp=p.idp \
                                       AND pr.idp=p.idp AND o.idu=%s' % user_id)
-            info[user_id] = [username, points, teamvalue, money, max_bid]
-            for player in players:
-                player_id, name, club_id, clubname, value, points, position = player
-                info[user_id].append(player)
+            info[user_id] = [username, points, teamvalue, money, maxbid, players]
+            # for player in players:
+            #     player_id, name, club_id, clubname, value, points, position = player
+            #     info[user_id].append(player)
     else:
         info = set_users_data()
 
     return info
 
 
-def set_users_data():
+def set_users_data(uid=None):
+    # TODO clean players not owned yet by the users
     info = dict()
     today = date.today()
-    community_info = com.info_community()
-    for user in community_info:
-        [user_name, user_id, points, teamvalue, money, max_bid] = user
+    users_info = com.get_users_info()
+    for user in users_info:
+        [user_name, user_id, points, teamvalue, money, maxbid] = user
         print '\nLoading %s data...' % user_name,
         db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
-        db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, max_bid) \
-            VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, max_bid))
+        db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, maxbid) \
+            VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, maxbid))
 
-        user_info = com.user_players(user_id)
-        for player in user_info[2:]:
+        user_info = com.get_user_players(user_id)
+        for player in user_info:
             [player_id, name, club_id, club_name, value, points, position] = player
             db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
             db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (
                 player_id, name, position, club_id))
             db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
         print 'done',
-        info[user_id] = [user_name, points, teamvalue, money, max_bid, user_info[2:]]
+        info[user_id] = [user_name, points, teamvalue, money, maxbid, user_info]
     db.commit()
     return info
+
+
+def set_players_data(uid=None):
+    """
+    Sets prices and points for all the players of the user
+    :return: Players of the user id
+    """
+    pass
 
 
 def clean_players():
@@ -272,21 +283,6 @@ def check_sell(my_players):
     # Ordenamos por el último elemento y luego lo eliminamos
     vender = sorted(vender, key=itemgetter(7), reverse=True)
     return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
-
-
-# def write_money_teamvalue(idp):
-#     """
-#     Escribe en base de datos el valor del equipo y el dinero que poseemos.
-#     """
-#     hoy = date.today().strftime('%Y%m%d')
-#     money = com.get_money()
-#     db.nocommit_query('INSERT IGNORE INTO money (idu,date,money) VALUES (%s,%s,%s)' % (idp, hoy, money))
-#
-#     value = com.get_team_value()
-#     db.nocommit_query('INSERT IGNORE INTO teamvalue (idu,date,value) VALUES (%s,%s,%s)' % (idp, hoy, value))
-#
-#     db.commit()
-#     return money, value
 
 
 def write_transactions(myid):
@@ -373,7 +369,7 @@ def colorize_rentability(rent):
     return '%s%4d%%%s' % (color, rent, ENDC)
 
 
-def _days_wo_price(idp):
+def days_wo_price(idp):
     """
     Devuelve la cantidad de días que lleva un jugador sin actualizarse en la base de datos.
     """
@@ -405,7 +401,7 @@ def _days_wo_price(idp):
 
 
 def get_prices_player(idp):
-    days_left = _days_wo_price(idp)
+    days_left = days_wo_price(idp)
     if not days_left:
         # Devolvemos las barras desde la fecha de compra, si no lo hemos comprado devolvemos todas las barras
         barras = db.simple_query(
@@ -420,7 +416,7 @@ def get_prices_player(idp):
 
 
 def write_prices_player(idp, player_name):
-    days_left = _days_wo_price(idp)
+    days_left = days_wo_price(idp)
     to_insert = list()
     dates, prices = get_player_prices(player_name)
     dates = translate_dates(dates)
