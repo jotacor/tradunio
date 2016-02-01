@@ -86,11 +86,11 @@ def main():
                 set_player_data(idp=idp, playername=playername)
 
     if args.update or args.all:
-        print '\n[*] Updating money, team value and save players and prices.'
+        print '\n[*] Updating money, team value, save players, prices and transactions.'
         users = set_users_data()
-        for user in users:
+        for user_id in users:
             my_players = list()
-            username, points, teamvalue, money, maxbid = users[user][0:5]
+            username, points, teamvalue, money, maxbid = users[user_id][0:5]
             for player in users[user][5]:
                 idp, playername, club_id, clubname, value, points, position = player
                 if club_id == 25:
@@ -100,6 +100,9 @@ def main():
                 dat = bars[-1][1]
                 to_copy = [idp, playername, club_id, clubname, float(value), points, position, dat.isoformat()]
                 my_players.append(to_copy)
+
+            set_transactions(user_id)
+            remove_sold_players()
 
             if user != com.get_myid():
                 continue
@@ -183,7 +186,6 @@ def set_users_data(uid=None):
     :param uid: ID of the user to update his information
     :return: information about the user and his players
     """
-    # TODO clean players not owned yet by the users at the end of this function
     # TODO: check first in database if I already have it all
     last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
     news = com.get_news()
@@ -191,37 +193,31 @@ def set_users_data(uid=None):
     today = date.today()
     last_news_date = news[1][0]
 
-    if last_news_date != today:
-        print "%sNo data already computed by Comunio.%s" % (RED, ENDC)
-        exit(1)
+    if last_news_date != today or last_date == today:
+        print "No data already computed by Comunio or data up to date."
+        info = get_users_data()
+    else:
+        users_info = com.get_users_info()
+        for user in users_info:
+            [user_name, user_id, points, teamvalue, money, maxbid] = user
 
-    # users_up_to_date = db.rowcount('SELECT idu FROM user_data WHERE date="%s"' % last_news_date)[0][0]
-    # if num_users == users_up_to_date:
-    #     print "All users already have the last data." % (GREEN, ENDC)
+            print '\nUpdating %s data =>' % user_name,
+            db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
+            db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, maxbid) \
+                VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, maxbid))
 
-    users_info = com.get_users_info()
-    for user in users_info:
-        [user_name, user_id, points, teamvalue, money, maxbid] = user
+            user_players = com.get_user_players(user_id)
+            for player in user_players:
+                [player_id, playername, club_id, club_name, value, points, position] = player
+                db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
+                db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (
+                    player_id, playername, position, club_id))
+                db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
+                set_player_data(idp=player_id, playername=playername)
+            print '%sdone%s' % (GREEN, ENDC),
+            info[user_id] = [user_name, points, teamvalue, money, maxbid, user_players]
+        db.commit()
 
-
-        print '\nUpdating %s data =>' % user_name,
-        db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
-        db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, maxbid) \
-            VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, maxbid))
-
-        user_players = com.get_user_players(user_id)
-        for player in user_players:
-            [player_id, playername, club_id, club_name, value, points, position] = player
-            db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
-            db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (
-                player_id, playername, position, club_id))
-            db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
-            set_player_data(idp=player_id, playername=playername)
-            remove_sold_players()
-        print '%sdone%s' % (GREEN, ENDC),
-        info[user_id] = [user_name, points, teamvalue, money, maxbid, user_players]
-
-    db.commit()
     return info
 
 
@@ -234,12 +230,9 @@ def set_player_data(idp=None, playername=None):
     """
     days_left = days_wo_price(idp)
     to_insert = list()
-    dates, prices = get_player_prices(playername)
-    dates = translate_dates(dates)
-
-    if len(dates) != len(prices):
-        print "%sThe prices arrays and dates haven't the same size.%s" % (RED, ENDC)
-    else:
+    if days_left:
+        dates, prices = get_player_prices(playername)
+        dates = translate_dates(dates)
         if days_left == 365:
             days_left = len(dates)
         for index in range(days_left):
@@ -249,15 +242,22 @@ def set_player_data(idp=None, playername=None):
             except:
                 price = 0
             to_insert.append((idp, p_date, price))
+        db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
+    else:
+        prices = db.simple_query('SELECT price FROM prices WHERE idp="%s" ORDER BY date ASC' % idp)
+        dates = db.simple_query('SELECT date FROM prices WHERE idp="%s" ORDER BY date ASC' % idp)
+        to_insert = [[idp, p_date, price] for p_date, price in zip(dates, prices)]
 
-    db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
+    if len(dates) != len(prices):
+        print "%sThe prices arrays and dates haven't the same size.%s" % (RED, ENDC)
+
     return to_insert
 
 
 def remove_sold_players():
     # Para esto añadir fecha 'added' a los jugadores de la base de datos y borrar los anteriores a 1 mes y que no estén en cartera
     """ Seleccionamos los jugadores vendidos para buscar la compra anterior """
-    limpiados = list()
+    cleaned = list()
     limpiar = db.simple_query('SELECT idp,date FROM transactions WHERE type="Sell" ORDER BY date DESC')
     for limpia in limpiar:
         borrar = db.simple_query(
@@ -265,8 +265,8 @@ def remove_sold_players():
             % (limpia[0], limpia[1]))
         if borrar:
             db.commit_query('UPDATE players SET idu=NULL WHERE idp=%s' % limpia[0])
-            limpiados.append(limpia)
-    return limpiados
+            cleaned.append(limpia)
+    return cleaned
 
 
 def check_sell(my_players):
@@ -336,9 +336,18 @@ def check_sell(my_players):
     return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
 
 
+def set_transactions(user_id):
+    news = com.get_news()
+    for new in news:
+        ndate = new[0]
+        text = new[1]
+
+
+
+
 def write_transactions(myid):
     """
-    Guarda en base de datos las compras realizadas
+    Save in database all transactions.
     """
     # TODO: Check last transaction date para no refrescar todo cada vez
     ret = []

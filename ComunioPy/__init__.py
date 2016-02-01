@@ -33,6 +33,7 @@ class Comunio:
         self.teamvalue = None
         self.community_id = community_id
         self.logged = None
+        self.news = list()
         self.login()
 
     def login(self):
@@ -86,16 +87,17 @@ class Comunio:
 
     def get_news(self):
         """Get all the news from first page"""
-        headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
-                   'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
-        soup = BeautifulSoup(req)
-        news = list()
-        n_date = soup.find_all('span', {'class', 'news_date'})
-        for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})):
-            news_date = datetime.strptime(n_date[index]['title'][0:8], "%d.%m.%y").date()
-            news.append([news_date, i.text])
-        return news
+        if not self.news:
+            headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
+                       'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
+            req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
+            soup = BeautifulSoup(req)
+            n_date = soup.find_all('span', {'class', 'news_date'})
+            for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})):
+                news_date = datetime.strptime(n_date[index]['title'][0:8], "%d.%m.%y").date()
+                self.news.append([news_date, i.text])
+
+        return self.news
 
     def logout(self):
         """Logout from Comunio"""
