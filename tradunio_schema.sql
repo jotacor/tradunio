@@ -1,35 +1,44 @@
--- --------------------------------------------------------
--- Host:                         localhost
--- Server version:               10.1.10-MariaDB - mariadb.org binary distribution
--- Server OS:                    Win64
--- HeidiSQL Version:             9.3.0.4984
--- --------------------------------------------------------
+CREATE DATABASE  IF NOT EXISTS `tradunio` /*!40100 DEFAULT CHARACTER SET utf8 */;
+USE `tradunio`;
+-- MySQL dump 10.13  Distrib 5.7.9, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: tradunio
+-- ------------------------------------------------------
+-- Server version	5.5.5-10.1.10-MariaDB
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET NAMES utf8mb4 */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
--- Dumping database structure for tradunio
-DROP DATABASE IF EXISTS `tradunio`;
-CREATE DATABASE IF NOT EXISTS `tradunio` /*!40100 DEFAULT CHARACTER SET utf8 */;
-USE `tradunio`;
+--
+-- Table structure for table `clubs`
+--
 
-
--- Dumping structure for table tradunio.clubs
 DROP TABLE IF EXISTS `clubs`;
-CREATE TABLE IF NOT EXISTS `clubs` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `clubs` (
   `idcl` int(10) NOT NULL COMMENT 'Club id',
   `name` varchar(25) NOT NULL COMMENT 'Club name',
   PRIMARY KEY (`idcl`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Data exporting was unselected.
+--
+-- Table structure for table `owners`
+--
 
-
--- Dumping structure for table tradunio.owners
 DROP TABLE IF EXISTS `owners`;
-CREATE TABLE IF NOT EXISTS `owners` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `owners` (
   `idp` int(10) NOT NULL,
   `idu` int(10) NOT NULL,
   PRIMARY KEY (`idp`,`idu`),
@@ -37,13 +46,16 @@ CREATE TABLE IF NOT EXISTS `owners` (
   CONSTRAINT `owners_fk_idp` FOREIGN KEY (`idp`) REFERENCES `players` (`idp`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `owners_fk_idu` FOREIGN KEY (`idu`) REFERENCES `users` (`idu`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Data exporting was unselected.
+--
+-- Table structure for table `players`
+--
 
-
--- Dumping structure for table tradunio.players
 DROP TABLE IF EXISTS `players`;
-CREATE TABLE IF NOT EXISTS `players` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `players` (
   `idp` int(10) NOT NULL COMMENT 'ID del jugador',
   `name` varchar(25) NOT NULL COMMENT 'Nombre',
   `position` varchar(25) NOT NULL COMMENT 'Demarcación del jugador',
@@ -52,39 +64,48 @@ CREATE TABLE IF NOT EXISTS `players` (
   KEY `idcl` (`idcl`),
   CONSTRAINT `players_fk_idcl` FOREIGN KEY (`idcl`) REFERENCES `clubs` (`idcl`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Data exporting was unselected.
+--
+-- Table structure for table `points`
+--
 
-
--- Dumping structure for table tradunio.points
 DROP TABLE IF EXISTS `points`;
-CREATE TABLE IF NOT EXISTS `points` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `points` (
   `idp` int(10) NOT NULL,
   `gameday` int(10) NOT NULL COMMENT 'ID jornada',
   `points` int(10) NOT NULL,
   PRIMARY KEY (`idp`,`gameday`),
   CONSTRAINT `points_fk_idp` FOREIGN KEY (`idp`) REFERENCES `players` (`idp`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Data exporting was unselected.
+--
+-- Table structure for table `prices`
+--
 
-
--- Dumping structure for table tradunio.prices
 DROP TABLE IF EXISTS `prices`;
-CREATE TABLE IF NOT EXISTS `prices` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `prices` (
   `idp` int(10) NOT NULL,
   `date` date NOT NULL,
   `price` int(10) NOT NULL,
   PRIMARY KEY (`idp`,`date`),
   CONSTRAINT `prices_idp_fk` FOREIGN KEY (`idp`) REFERENCES `players` (`idp`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Data exporting was unselected.
+--
+-- Table structure for table `transactions`
+--
 
-
--- Dumping structure for table tradunio.transactions
 DROP TABLE IF EXISTS `transactions`;
-CREATE TABLE IF NOT EXISTS `transactions` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `transactions` (
   `idp` int(10) NOT NULL,
   `idu` int(10) NOT NULL,
   `type` varchar(8) NOT NULL COMMENT 'Buy/Sell',
@@ -97,37 +118,50 @@ CREATE TABLE IF NOT EXISTS `transactions` (
   CONSTRAINT `transactions_idp_fk` FOREIGN KEY (`idp`) REFERENCES `players` (`idp`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `transactions_idu_fk` FOREIGN KEY (`idu`) REFERENCES `users` (`idu`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Data exporting was unselected.
+--
+-- Table structure for table `user_data`
+--
 
+DROP TABLE IF EXISTS `user_data`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user_data` (
+  `idu` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `points` int(11) NOT NULL,
+  `money` int(11) NOT NULL,
+  `teamvalue` int(11) NOT NULL,
+  `maxbid` int(11) NOT NULL,
+  PRIMARY KEY (`idu`,`date`),
+  CONSTRAINT `idu_users` FOREIGN KEY (`idu`) REFERENCES `users` (`idu`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Dumping structure for table tradunio.users
+--
+-- Table structure for table `users`
+--
+
 DROP TABLE IF EXISTS `users`;
-CREATE TABLE IF NOT EXISTS `users` (
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `users` (
   `idu` int(10) NOT NULL,
   `name` varchar(25) NOT NULL,
   PRIMARY KEY (`idu`,`name`),
   UNIQUE KEY `idu` (`idu`),
   KEY `idu_2` (`idu`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
--- Data exporting was unselected.
-
-
--- Dumping structure for table tradunio.user_data
-DROP TABLE IF EXISTS `user_data`;
-CREATE TABLE IF NOT EXISTS `user_data` (
-  `idu` int(11) NOT NULL,
-  `date` date NOT NULL,
-  `points` int(11) NOT NULL,
-  `money` int(11) NOT NULL,
-  `teamvalue` int(11) NOT NULL,
-  `max_bid` int(11) NOT NULL,
-  PRIMARY KEY (`idu`,`date`),
-  CONSTRAINT `idu_users` FOREIGN KEY (`idu`) REFERENCES `users` (`idu`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
--- Data exporting was unselected.
-/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
-/*!40014 SET FOREIGN_KEY_CHECKS=IF(@OLD_FOREIGN_KEY_CHECKS IS NULL, 1, @OLD_FOREIGN_KEY_CHECKS) */;
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2016-02-01 11:37:54
