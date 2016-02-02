@@ -84,6 +84,9 @@ def main():
                 set_player_data(idp=idp, playername=playername)
 
     if args.update or args.all:
+        if not com.logged:
+            exit(1)
+
         print '\n[*] Updating money, team value, save players, prices and transactions.'
         users = set_users_data()
         for user_id in users:
@@ -99,7 +102,7 @@ def main():
                 to_copy = [idp, playername, club_id, clubname, float(value), points, position, dat.isoformat()]
                 players.append(to_copy)
 
-            # set_transactions(user_id)
+            set_transactions()
 
             # print_user_data(username, teamvalue, money, maxbid, points, players)
 
@@ -301,11 +304,46 @@ def check_sell(my_players):
     return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
 
 
-def set_transactions(user_id):
+def set_transactions():
     news = com.get_news()
     for new in news:
-        ndate = new[0]
-        text = new[1]
+        ndate, title, text = new
+        if 'Fichajes' not in title:
+            continue
+        pattern = re.compile(ur'(?:(?:\\n)?([(\w+|\w+ \w+)]+?)(?: cambia por )([0-9\.\,]*?)(?: .*? de )([A-zñÑ0-9\\ ]+?) a ([A-zñÑ0-9\\ ]+?)\.)', re.UNICODE)
+        transactions = re.findall(pattern, text)
+        users = dict()
+        players = dict()
+        players = {name:int(idp) for (name, idp) in db.simple_query('SELECT name, idp FROM players')}
+        for trans in transactions:
+            player, value, fr, to = trans
+            value = int(value.replace('.',''))
+            player = player.strip()
+            try:
+                # TODO: Refactor please
+                player_id = players[player]
+                if 'Computer' in fr:
+                    kind = 'Buy'
+                    user_id = db.simple_query('SELECT idu FROM users WHERE name LIKE "%%%s%%"' % to)[0][0]
+                    db.commit_query('INSERT IGNORE INTO transactions (idp, idu, type, price, date) VALUES (%s,%s,"%s",%s,"%s")'
+                        % (player_id, user_id, kind, value, ndate))
+                elif 'Computer' in to:
+                    kind = 'Sell'
+                    user_id = db.simple_query('SELECT idu FROM users WHERE name LIKE "%%%s%%"' % fr)[0][0]
+                    db.commit_query('INSERT IGNORE INTO transactions (idp, idu, type, price, date) VALUES (%s,%s,"%s",%s,"%s")'
+                        % (player_id, user_id, kind, value, ndate))
+                else:
+                    kind = 'Buy'
+                    user_id = db.simple_query('SELECT idu FROM users WHERE name LIKE "%%%s%%"' % to)[0][0]
+                    db.commit_query('INSERT IGNORE INTO transactions (idp, idu, type, price, date) VALUES (%s,%s,"%s",%s,"%s")'
+                        % (player_id, user_id, kind, value, ndate))
+                    user_id = db.simple_query('SELECT idu FROM users WHERE name LIKE "%%%s%%"' % fr)[0][0]
+                    kind = 'Sell'
+                    db.commit_query('INSERT IGNORE INTO transactions (idp, idu, type, price, date) VALUES (%s,%s,"%s",%s,"%s")'
+                        % (player_id, user_id, kind, value, ndate))
+            except:
+                # Player selled before having in database
+                pass
 
 
 def check_bids(myid):
