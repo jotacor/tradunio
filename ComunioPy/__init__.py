@@ -32,9 +32,8 @@ class Comunio:
         self.money = None
         self.teamvalue = None
         self.community_id = community_id
-        self.logged = None
         self.news = list()
-        self.login()
+        self.logged = self.login()
 
     def login(self):
         payload = {'login': self.username,
@@ -45,9 +44,9 @@ class Comunio:
         req = self.session.post('http://' + self.domain + '/login.phtml', headers=headers, data=payload).content
         if 'puntos en proceso' in req or 'points in process' in req:
             print 'Comunio webpage not available.'
-            return
+            return False
 
-        self.load_info()  # Function to load the account information
+        return self.load_info()  # Function to load the account information
 
     def load_info(self):
         """ Get info from logged account """
@@ -59,7 +58,7 @@ class Comunio:
         estado = soup.find('div', {'id': 'content'}).find('div', {'id': 'manager'}).string
         if estado:
             print estado.strip()
-            return
+            return False
 
         [s.extract() for s in soup('strong')]
         if soup.find('div', {'id': 'userid'}) is not None:
@@ -68,6 +67,8 @@ class Comunio:
             self.teamvalue = int(soup.find('div', {'id': 'teamvalue'}).p.text.strip().replace(".", "")[:-2])
             self.community_id = int(soup.find('link')['href'][24:])
             # self.username = soup.find('div', {'id': 'username'}).p.a.text
+
+        return True
 
     def get_money(self):
         """Get my money"""
@@ -92,11 +93,27 @@ class Comunio:
                        'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
             req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
             soup = BeautifulSoup(req)
-            n_date = soup.find_all('span', {'class', 'news_date'})
+            newsheader = soup.find_all('div', {'class', 'newsheader'})
             for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})):
-                news_date = datetime.strptime(n_date[index]['title'][0:8], "%d.%m.%y").date()
-                self.news.append([news_date, i.text])
+                news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
+                news_title = newsheader[index].text.split(">")[1].strip()
+                self.news.append([news_date, news_title, i.text])
 
+            first_news = 10
+            while True and first_news < 200:
+                other_news = BeautifulSoup(
+                    self.session.post('http://' + self.domain + '/team_news.phtml', headers=headers,
+                                      data={'newsAction': 'reload', 'first_news': first_news}).content)
+                newsheader = other_news.find_all('div', {'class', 'newsheader'})
+                for index, i in enumerate(other_news.find_all('div', {'class', 'article_content_text'})):
+                    news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
+                    news_title = newsheader[index].text.split(">")[1].strip()
+                    self.news.append([news_date, news_title, i.text])
+                    if 'ha reiniciado la comunidad' in news_title:
+                        first_news = 500
+                        break
+                first_news += 10
+                time.sleep(1)
         return self.news
 
     def logout(self):
@@ -173,8 +190,9 @@ class Comunio:
                       'Host': 'www.comuniazo.com', 'X-Requested-With': 'XMLHttpRequest'}
         money = requests.session()
         money.get('http://www.comuniazo.com/comunio/dinero', headers=headers_zo)
-        money_bids = json.loads(money.get('http://www.comuniazo.com/ajax/dinero.php?user=%s&dinero=20000000' % self.username,
-                                          headers=headers_zo).content)
+        money_bids = json.loads(
+            money.get('http://www.comuniazo.com/ajax/dinero.php?user=%s&dinero=20000000' % self.username,
+                      headers=headers_zo).content)
 
         info = list()
         for row in soup.find('table', cellpadding=2).find_all('tr')[1:]:
