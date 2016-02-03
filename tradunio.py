@@ -277,12 +277,6 @@ def set_player_data(player_id=None, playername=None):
         dates, prices, points = get_player_data(player_id=player_id, playername=playername)
         if days_left >= 365:
             days_left = len(dates)
-        # for index in range(days_left):
-        #     try:
-        #         price = int(prices[index])
-        #     except:
-        #         price = 0
-        #     prices.append((player_id, dates[index], price))
         db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s' % player_id + ',%s,%s)', zip(dates[:days_left], prices[:days_left]))
         db.many_commit_query('INSERT IGNORE INTO points (idp,gameday,points) VALUES (%s' % player_id + ',%s,%s)', points)
 
