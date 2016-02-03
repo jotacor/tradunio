@@ -86,9 +86,12 @@ class Comunio:
         """Name of the user"""
         return self.username
 
-    def get_news(self):
-        """Get all the news from first page"""
+    def get_news(self, until_date=None):
+        """ Get all the news until the date until_date included.
+        :param until_date: Last date, included, we want the news.
+        """
         if not self.news:
+            more_news = True
             headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                        'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
             req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
@@ -97,10 +100,12 @@ class Comunio:
             for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})):
                 news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
                 news_title = newsheader[index].text.split(">")[1].strip()
+                if news_date < until_date:
+                    more_news = None
+                    break
                 self.news.append([news_date, news_title, i.text])
-
             first_news = 10
-            while True and first_news < 200:
+            while more_news and first_news < 200:
                 other_news = BeautifulSoup(
                     self.session.post('http://' + self.domain + '/team_news.phtml', headers=headers,
                                       data={'newsAction': 'reload', 'first_news': first_news}).content)
@@ -108,10 +113,10 @@ class Comunio:
                 for index, i in enumerate(other_news.find_all('div', {'class', 'article_content_text'})):
                     news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
                     news_title = newsheader[index].text.split(">")[1].strip()
-                    self.news.append([news_date, news_title, i.text])
-                    if 'ha reiniciado la comunidad' in news_title:
-                        first_news = 500
+                    if news_date < until_date:
+                        more_news = None
                         break
+                    self.news.append([news_date, news_title, i.text])
                 first_news += 10
                 time.sleep(1)
         return self.news
