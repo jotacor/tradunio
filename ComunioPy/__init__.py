@@ -145,25 +145,21 @@ class Comunio:
         req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + str(userid),
                                headers=headers).content
         soup = BeautifulSoup(req)
-        title = soup.title.string
-        community = soup.find_all('table', border=0)[1].a.text
-        username = re.search('\((.*?)\)', soup.find('div', id='title').text).group(1)
-        try:
-            points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[1].text)[0]
-        except IndexError:
-            points = re.findall('\d+', soup.find_all('table', border=0)[1].find_all('td')[2].text)[0]
-        info = list()
+        # title = soup.title.string
+        # community = soup.find_all('table', border=0)[1].a.text
+        # username = re.search('\((.*?)\)', soup.find('div', id='title').text).group(1)
+        players_info = list()
         for i in soup.find('table', cellpadding=2).find_all('tr')[1:]:
             cad = i.find_all('td')
             player_id = int(re.findall('\d+', i.find_all('img')[0]['src'])[0])
             name = cad[2].text.strip()
             club = cad[3].find('img')['alt']
             club_id = int(re.findall('\d+', i.find_all('img')[1]['src'])[0])
-            value = cad[4].text.replace(".", "")
-            points = cad[5].text
+            value = float(cad[4].text.replace(".", ""))
+            totalpoints = float(cad[5].text)
             position = cad[6].text
-            info.append([player_id, name, club_id, club, value, points, position])
-        return info
+            players_info.append([player_id, name, club_id, club, value, totalpoints, position])
+        return players_info
 
     def lineup_user(self, userid):
         """Get user lineup using a ID"""
@@ -208,7 +204,7 @@ class Comunio:
             info.append([user_name, int(user_id), user_points, team_value, money, max_bid])
         return info
 
-    def info_player(self, pid):
+    def get_info_player(self, pid):
         """'
         Get info football player using a ID
         @return: [name,position,team,points,price]

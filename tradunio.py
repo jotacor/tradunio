@@ -12,6 +12,7 @@ Created on Oct 21, 2014
 
 
 import argparse
+from bs4 import BeautifulSoup
 import db_tradunio as db
 from ComunioPy import Comunio
 from ConfigParser import ConfigParser
@@ -73,13 +74,13 @@ def main():
                     print "done"
                 db.commit_query('SET FOREIGN_KEY_CHECKS=1;')
             else:
-                print "\tExection aborted."
+                print "\tExecution aborted."
                 exit(0)
 
         users = set_users_data()
-        for user in users:
-            username, points, teamvalue, money, maxbid = users[user][0:5]
-            for player in users[user][5]:
+        for user_id in users:
+            username, points, teamvalue, money, maxbid, players = users[user_id]
+            for player in players:
                 idp, playername, club_id, clubname, value, points, position = player
                 set_player_data(idp=idp, playername=playername)
 
@@ -90,21 +91,17 @@ def main():
         print '\n[*] Updating money, team value, save players, prices and transactions.'
         users = set_users_data()
         for user_id in users:
-            players = list()
-            username, points, teamvalue, money, maxbid = users[user_id][0:5]
-            for player in users[user_id][5]:
+            username, userpoints, teamvalue, money, maxbid, players = users[user_id]
+            for player in players:
                 idp, playername, club_id, clubname, value, points, position = player
                 if club_id == 25:
                     # Player is not in Primera División
                     continue
-                bars = set_player_data(idp=idp, playername=playername)
-                dat = bars[-1][1]
-                to_copy = [idp, playername, club_id, clubname, float(value), points, position, dat.isoformat()]
-                players.append(to_copy)
+                set_player_data(idp=idp, playername=playername)
 
             set_transactions()
 
-            # print_user_data(username, teamvalue, money, maxbid, points, players)
+            print_user_data(username, teamvalue, money, maxbid, userpoints, players)
 
     if args.comprar or args.all:
         sleep(1)
@@ -143,14 +140,6 @@ def main():
     com.logout()
 
 
-def print_user_data(username, teamvalue, money, maxbid, points, players):
-    print '\n%s:' % username
-    print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
-        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
-    headers = ['Player ID', 'Name', 'Club ID', 'Club', 'Value', 'Points', 'Position', 'Last date']
-    print tabulate(players, headers, tablefmt="rst", floatfmt=",.0f")
-
-
 def get_users_data():
     info = dict()
     last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
@@ -176,31 +165,89 @@ def set_users_data(uid=None):
     :param uid: ID of the user to update his information
     :return: information about the user and his players
     """
-    info = dict()
+    users_data = dict()
     today = date.today()
 
     users_info = com.get_users_info()
+    print 'Updating users data',
     for user in users_info:
-        [user_name, user_id, points, teamvalue, money, maxbid] = user
-
-        print '\nUpdating %s data =>' % user_name,
+        print '.',
+        [user_name, user_id, user_points, teamvalue, money, maxbid] = user
         db.nocommit_query('INSERT IGNORE INTO users (idu, name) VALUES (%s, "%s")' % (user_id, user_name))
         db.nocommit_query('INSERT IGNORE INTO user_data (idu, date, points, money, teamvalue, maxbid) \
-            VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, points, money, teamvalue, maxbid))
+            VALUES (%s, "%s", %s, %s, %s, %s)' % (user_id, today, user_points, money, teamvalue, maxbid))
         db.nocommit_query('DELETE FROM owners WHERE idu="%s"' % user_id)
 
         user_players = com.get_user_players(user_id)
         for player in user_players:
-            [player_id, playername, club_id, club_name, value, points, position] = player
+            player_id, playername, club_id, club_name, value, player_points, position = player
             db.nocommit_query('INSERT IGNORE INTO clubs (idcl, name) VALUES (%s, "%s")' % (club_id, club_name))
             db.nocommit_query('INSERT IGNORE INTO players (idp, name, position, idcl) VALUES (%s, "%s", "%s", %s)' % (
                 player_id, playername, position, club_id))
             db.nocommit_query('INSERT IGNORE INTO owners (idp, idu) VALUES (%s, %s)' % (player_id, user_id))
-        print '%sdone%s' % (GREEN, ENDC),
-        info[user_id] = [user_name, points, teamvalue, money, maxbid, user_players]
+        users_data[user_id] = [user_name, user_points, teamvalue, money, maxbid, user_players]
         db.commit()
+    print '%sdone%s.' % (GREEN, ENDC)
+    return users_data
 
-    return info
+
+def get_player_data(playername, prices=0):
+    """
+    Get prices from a player
+    @return: [dates], [prices], [points]
+    """
+    session = requests.session()
+    url_comuniazo = 'http://www.comuniazo.com'
+    user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0'
+    headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain", 'Referer': url_comuniazo,
+               "User-Agent": user_agent}
+    url_jugadores = url_comuniazo + '/comunio/jugadores/'
+    suffix, lastname = '', ''
+    count = 0
+    dates, points = list(), list()
+    while True and len(dates) < 2:
+        playername = check_exceptions(playername)
+        req = session.get(url_jugadores + playername.replace(" ", "-").replace(".", "").replace("'", "") + suffix, headers=headers).content
+        dates_re = re.search("(\"[0-9 ][0-9] de \w+\",?,?)+", req)
+        try:
+            dates = dates_re.group(0).replace('"', '').split(",")
+        except:
+            if count == 0:
+                suffix = '-2'
+                count += 1
+                continue
+            elif count == 1:
+                lastname = playername.split(" ")[1]
+                playername = playername.split(" ")[0]
+                suffix = ''
+                count += 1
+                continue
+            elif count == 2:
+                playername = lastname
+                count += 1
+                continue
+
+        data_re = re.search("data: \[(([0-9null]+,?)+)\]", req)
+        prices = data_re.group(1).split(',')
+        html = BeautifulSoup(req)
+        try:
+            points_rows = html.find('table', {'class': 'points-list'}).find_all('tr')
+            for row in points_rows:
+                gameday = int(row.td.text)
+                if row.div:
+                    points.append([gameday, int(row.div.text)])
+                else:
+                    points.append([gameday, 0])
+        except:
+            # Player without points
+            pass
+
+        if suffix == '-2' or len(dates) > 2:
+            break
+        else:
+            suffix = '-2'
+
+    return dates, prices, points
 
 
 def set_player_data(idp=None, playername=None):
@@ -213,8 +260,7 @@ def set_player_data(idp=None, playername=None):
     days_left = days_wo_price(idp)
     to_insert = list()
     if days_left:
-        dates, prices = get_player_prices(playername)
-        # TODO: get players points
+        dates, prices, points = get_player_data(playername)
         dates = translate_dates(dates)
         if days_left >= 365:
             days_left = len(dates)
@@ -226,82 +272,12 @@ def set_player_data(idp=None, playername=None):
                 price = 0
             to_insert.append((idp, p_date, price))
         db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s,%s,%s)', to_insert)
-    else:
-        prices = db.simple_query('SELECT price FROM prices WHERE idp="%s" ORDER BY date ASC' % idp)
-        dates = db.simple_query('SELECT date FROM prices WHERE idp="%s" ORDER BY date ASC' % idp)
-        to_insert = [[idp, p_date[0], price[0]] for p_date, price in zip(dates, prices)]
+        db.many_commit_query('INSERT IGNORE INTO points (idp,gameday,points) VALUES (%s' % idp + ',%s,%s)', points)
 
-    if len(dates) != len(prices):
-        print "%sThe prices arrays and dates haven't the same size.%s" % (RED, ENDC)
+        if len(dates) != len(prices):
+            print "%sThe prices arrays and dates haven't the same size.%s" % (RED, ENDC)
 
     return to_insert
-
-
-def check_sell(my_players):
-    """
-    Comprueba si el jugador puede o debe ser vendido
-    """
-    vender = list()
-    for player in my_players:
-        idp = player[0]
-        name = player[1]
-        vende = False
-        hoy = date.today().strftime('%Y%m%d')
-
-        compra = db.simple_query(
-            'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
-        if compra is None:
-            precio_actual = float(
-                db.simple_query('SELECT price FROM prices WHERE idp=%s ORDER BY date DESC LIMIT 1' % idp)[0])
-            precio_inicial = float(db.simple_query(
-                'SELECT price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' % (
-                    idp, '%s0801' % date.today().year))[0])
-            rent = (precio_actual - precio_inicial) / precio_inicial * 100
-            vender.append([idp, name, vende, '-', precio_inicial, precio_actual, colorize_rentability(rent), rent])
-            continue
-
-        precio_ant = 0
-        stop = 0
-        fecha_compra = compra[0]
-        precio_compra = float(compra[1])
-
-        barras = db.simple_query(
-            'SELECT idp,date,price FROM prices WHERE idp=%s AND date>=%s ORDER BY date ASC' % (idp, compra[0]))
-        # Si el jugador no tuviera barras las rellena, o si estuvieran desactualizadas
-        if len(barras) == 0 or barras[-1][1] < hoy:
-            barras = set_player_data(idp, name)
-
-        for barra in barras:
-            precio = float(barra[2])
-            if precio > precio_ant:
-                precio_ant = precio
-                stop = int(precio_ant - (precio_ant * FILTRO_STOP))
-
-            # Comprobamos si el precio ha roto el stop
-            if precio < stop:
-                vende = True
-
-            # Si el precio del jugador se ha recuperado y ya había entrado en venta, se demarca la venta
-            if precio > stop and vende:
-                vende = False
-
-        # Calculamos la rentabilidad
-        rent = (precio - precio_compra) / precio_compra * 100
-
-        if vende:
-            vender.append([idp, name, '%s%s%s' % (GREEN, vende, ENDC), fecha_compra, precio_compra, precio,
-                           colorize_rentability(rent), rent])
-        else:
-            vender.append(
-                [idp, name, '%s' % (vende), fecha_compra, precio_compra, precio, colorize_rentability(rent), rent])
-
-        # Guardamos rentabilidad de los jugadores en cartera
-        db.commit_query(
-            'INSERT IGNORE INTO rentabilities (idp, date, rentability) VALUES (%s, %s, %s)' % (idp, hoy, int(rent)))
-
-    # Ordenamos por el último elemento y luego lo eliminamos
-    vender = sorted(vender, key=itemgetter(7), reverse=True)
-    return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
 
 
 def set_transactions():
@@ -312,8 +288,6 @@ def set_transactions():
             continue
         pattern = re.compile(ur'(?:(?:\\n)?([(\w+|\w+ \w+)]+?)(?: cambia por )([0-9\.\,]*?)(?: .*? de )([A-zñÑ0-9\\ ]+?) a ([A-zñÑ0-9\\ ]+?)\.)', re.UNICODE)
         transactions = re.findall(pattern, text)
-        users = dict()
-        players = dict()
         players = {name:int(idp) for (name, idp) in db.simple_query('SELECT name, idp FROM players')}
         for trans in transactions:
             player, value, fr, to = trans
@@ -413,93 +387,6 @@ def check_bids(myid):
     return sorted(ret, key=itemgetter(3), reverse=True)
 
 
-def colorize_rentability(rent):
-    color = WHITE
-    if rent <= -10:
-        color = RED
-    elif rent < 0:
-        color = YELLOW
-    elif rent < 10:
-        color = CYAN
-    else:
-        color = GREEN
-
-    return '%s%4d%%%s' % (color, rent, ENDC)
-
-
-def days_wo_price(idp):
-    """
-    Devuelve la cantidad de días que lleva un jugador sin actualizarse en la base de datos.
-    """
-    max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % idp)[0][0]
-    res = 365
-    try:
-        res = (date.today() - max_date).days
-    except:
-        pass
-    if res > 365 or res < 0:
-        res = 365
-    return res
-
-
-def get_player_prices(playername, prices=0):
-    """
-    Get prices from a player
-    @return: [dates],[data]
-    """
-    session = requests.session()
-    url_comuniazo = 'http://www.comuniazo.com'
-    user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0'
-    headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain", 'Referer': url_comuniazo,
-               "User-Agent": user_agent}
-    url_jugadores = url_comuniazo + '/comunio/jugadores/'
-    suffix = ''
-    lastname = ''
-    count = 0
-    dates = []
-    while True and len(dates) < 2:
-        playername = check_exceptions(playername)
-        req = session.get(url_jugadores + playername.replace(" ", "-").replace(".", "").replace("'", "") + suffix, headers=headers).content
-        dates_re = re.search("(\"[0-9 ][0-9] de \w+\",?,?)+", req)
-        try:
-            dates = dates_re.group(0).replace('"', '').split(",")
-        except:
-            if count == 0:
-                suffix = '-2'
-                count += 1
-                continue
-            elif count == 1:
-                lastname = playername.split(" ")[1]
-                playername = playername.split(" ")[0]
-                suffix = ''
-                count += 1
-                continue
-            elif count == 2:
-                playername = lastname
-                count += 1
-                continue
-
-        data_re = re.search("data: \[(([0-9null]+,?)+)\]", req)
-        prices = data_re.group(1).split(',')
-
-        if suffix == '-2' or len(dates) > 2:
-            break
-        else:
-            suffix = '-2'
-
-    return dates, prices
-
-
-def get_player_points(playername, points=0):
-    # TODO: Implement
-    pass
-
-
-def check_exceptions(playername):
-    exceptions = {'Banega': 'Ever Banega', }
-    return exceptions.get(playername, playername)
-
-
 def check_buy(name, min_price, mkt_price):
     """
     Check whether it's in maximus now
@@ -521,6 +408,73 @@ def check_buy(name, min_price, mkt_price):
         return True
     else:
         return False
+
+
+def check_sell(my_players):
+    """
+    Comprueba si el jugador puede o debe ser vendido
+    """
+    vender = list()
+    for player in my_players:
+        idp = player[0]
+        name = player[1]
+        vende = False
+        hoy = date.today().strftime('%Y%m%d')
+
+        compra = db.simple_query(
+            'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
+        if compra is None:
+            precio_actual = float(
+                db.simple_query('SELECT price FROM prices WHERE idp=%s ORDER BY date DESC LIMIT 1' % idp)[0])
+            precio_inicial = float(db.simple_query(
+                'SELECT price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' % (
+                    idp, '%s0801' % date.today().year))[0])
+            rent = (precio_actual - precio_inicial) / precio_inicial * 100
+            vender.append([idp, name, vende, '-', precio_inicial, precio_actual, colorize_rentability(rent), rent])
+            continue
+
+        precio_ant = 0
+        stop = 0
+        fecha_compra = compra[0]
+        precio_compra = float(compra[1])
+
+        barras = db.simple_query(
+            'SELECT idp,date,price FROM prices WHERE idp=%s AND date>=%s ORDER BY date ASC' % (idp, compra[0]))
+        # Si el jugador no tuviera barras las rellena, o si estuvieran desactualizadas
+        if len(barras) == 0 or barras[-1][1] < hoy:
+            barras = set_player_data(idp, name)
+
+        for barra in barras:
+            precio = float(barra[2])
+            if precio > precio_ant:
+                precio_ant = precio
+                stop = int(precio_ant - (precio_ant * FILTRO_STOP))
+
+            # Comprobamos si el precio ha roto el stop
+            if precio < stop:
+                vende = True
+
+            # Si el precio del jugador se ha recuperado y ya había entrado en venta, se demarca la venta
+            if precio > stop and vende:
+                vende = False
+
+        # Calculamos la rentabilidad
+        rent = (precio - precio_compra) / precio_compra * 100
+
+        if vende:
+            vender.append([idp, name, '%s%s%s' % (GREEN, vende, ENDC), fecha_compra, precio_compra, precio,
+                           colorize_rentability(rent), rent])
+        else:
+            vender.append(
+                [idp, name, '%s' % (vende), fecha_compra, precio_compra, precio, colorize_rentability(rent), rent])
+
+        # Guardamos rentabilidad de los jugadores en cartera
+        db.commit_query(
+            'INSERT IGNORE INTO rentabilities (idp, date, rentability) VALUES (%s, %s, %s)' % (idp, hoy, int(rent)))
+
+    # Ordenamos por el último elemento y luego lo eliminamos
+    vender = sorted(vender, key=itemgetter(7), reverse=True)
+    return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
 
 
 def translate_dates(dates):
@@ -553,6 +507,50 @@ def translate_dates(dates):
 
         ret.append('%s-%s-%s' % (year, month, day))
     return ret
+
+
+def colorize_rentability(rent):
+    color = WHITE
+    if rent <= -10:
+        color = RED
+    elif rent < 0:
+        color = YELLOW
+    elif rent < 10:
+        color = CYAN
+    else:
+        color = GREEN
+
+    return '%s%4d%%%s' % (color, rent, ENDC)
+
+
+def days_wo_price(idp):
+    """
+    Returns the days that the player hasn't price in the database.
+    @param idp: Player ID
+    @return: Days without price (max 365 days)
+    """
+    max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % idp)[0][0]
+    try:
+        res = (date.today() - max_date).days
+        if not (0 < res < 365):
+            res = 365
+    except:
+        res = 365
+
+    return res
+
+
+def check_exceptions(playername):
+    exceptions = {'Banega': 'Ever Banega', }
+    return exceptions.get(playername, playername)
+
+
+def print_user_data(username, teamvalue, money, maxbid, points, players):
+    print '\n%s:' % username
+    print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
+        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
+    headers = ['Player ID', 'Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
+    print tabulate(players, headers, tablefmt="rst", floatfmt=",.0f")
 
 
 if __name__ == '__main__':
