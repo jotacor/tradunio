@@ -142,19 +142,18 @@ def main():
 
 
 def get_users_data():
-    users_data = dict()
+    """
+    Gets data of the user
+    :return:
+    """
     last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
     if last_date == today:
-        users = db.simple_query('SELECT u.idu,u.name,d.date,d.points,d.money,d.teamvalue,d.maxbid \
+        users_data = dict()
+        users = db.simple_query('SELECT u.idu,u.name,d.points,d.money,d.teamvalue,d.maxbid \
                         FROM users u, user_data d WHERE u.idu=d.idu AND date = "%s"' % last_date)
         for user in users:
-            user_id, username, date, points, money, teamvalue, maxbid = user
-            # TODO: Use INNER JOIN
-            players = db.simple_query('SELECT p.idp,p.name,c.idcl,c.name,pr.price,0,p.position \
-                                      FROM players p, clubs c, owners o, prices pr \
-                                      WHERE p.idcl=c.idcl AND o.idp=p.idp \
-                                      AND pr.idp=p.idp AND o.idu=%s' % user_id)
-            users_data[user_id] = [username, points, teamvalue, money, maxbid, players]
+            user_id, username, user_points, money, teamvalue, maxbid = user
+            users_data[user_id] = [username, user_points, teamvalue, money, maxbid]
     else:
         users_data = set_users_data()
 
@@ -163,8 +162,8 @@ def get_users_data():
 
 def set_users_data():
     """
-    :param uid: ID of the user to update his information
-    :return: information about the user and his players
+    Gets the last data of the user from Comunio and saves it to database.
+    :return: information about the users
     """
     users_data = dict()
     today = date.today()
@@ -181,6 +180,17 @@ def set_users_data():
         db.commit()
     print '%sdone%s.' % (GREEN, ENDC)
     return users_data
+
+
+def get_user_players(user_id=None, username=None):
+    """
+    Get the players of the users checking first if it is updated in database.
+    :param user_id:
+    :param username:
+    :return:
+    """
+    # TODO: implement get_user_players
+    pass
 
 
 def set_user_players(user_id=None, username=None):
@@ -286,13 +296,20 @@ def set_player_data(player_id=None, playername=None):
     return prices, points
 
 
-def set_new_player(idp=None, playername=None):
+def set_new_player(player_id=None, playername=None):
+    """
+    Set new player data in the database.
+    :param idp:
+    :param playername:
+    :return:
+    """
+    # TODO: implement set_new_player
     pass
 
 
 def set_transactions():
     """
-    Save to database all the transactions
+    Save to database all the transactions.
     :return: None
     """
     until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]
@@ -335,6 +352,7 @@ def set_transactions():
                 # Player selled before having in database
                 pass
     print '%sdone%s.' % (GREEN, ENDC)
+
 
 def check_bids(myid):
     # TODO: Check last transaction date para no refrescar todo cada vez
