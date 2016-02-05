@@ -294,6 +294,8 @@ class Comunio:
         """
         Returns the football players currently on sale
         @return: [[name, team, min_price, market_price, points, date, owner, position]]
+        :param only_computer:
+        :param community_id:
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
@@ -306,17 +308,18 @@ class Comunio:
         on_sale = list()
         year_flag = 0
         for i in soup.find_all('table', {'class', 'tablecontent03'})[2].find_all('tr')[1:]:
-            name = i.find_all('td')[0].text.strip()
-            team = i.find('img')['alt']
-            min_price = i.find_all('td')[2].text.replace(".", "").strip()
-            market_price = i.find_all('td')[3].text.replace(".", "").strip()
-            points = i.find_all('td')[4].text.strip().strip()
+            columns = i.find_all('td')
+            name = columns[1].text.strip()
+            team = columns[2].a['title'].strip()
+            min_price = float(columns[3].text.replace(".", "").strip())
+            market_price = float(columns[4].text.replace(".", "").strip())
+            points = int(columns[5].text.strip().strip())
             # Controlamos el cambio de año, ya que comunio no lo dá
-            if current_month <= 7 < int(i.find_all('td')[5].text[3:5]):
+            if current_month <= 7 < int(columns[6].text[3:5]):
                 year_flag = 1
-            date = str(current_year - year_flag) + i.find_all('td')[5].text[3:5] + i.find_all('td')[5].text[:2]
-            owner = i.find_all('td')[6].text.strip()
-            position = i.find_all('td')[7].text.strip()
+            date = str(current_year - year_flag) + columns[6].text[3:5] + columns[6].text[:2]
+            owner = columns[7].text.strip()
+            position = columns[8].text.strip()
             # Comprobamos si solamente queremos los de la computadora o no
             if (only_computer and owner == 'Computer') or not only_computer:
                 on_sale.append([name, team, min_price, market_price, points, date, owner, position])

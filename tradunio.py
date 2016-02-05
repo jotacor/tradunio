@@ -46,20 +46,20 @@ def main():
     parser = argparse.ArgumentParser(description='Helps you to play in Comunio.')
     parser.add_argument('-i', '--init', action='store_true', dest='init',
                         help='Initialize the database with users, clubs, players and transactions.')
-    parser.add_argument('-a', '--all', action='store_true', dest='all',
-                        help='Realiza una ejecución completa.')
     parser.add_argument('-u', '--update', action='store_true', dest='update',
                         help='Update all data of all players and users.')
+    parser.add_argument('-b', '--buy', action='store_true', dest='buy',
+                        help='Check all the players to buy.')
     parser.add_argument('-v', '--vender', action='store_true', dest='vender',
                         help='Muestra los jugadores a vender.')
-    parser.add_argument('-c', '--comprar', action='store_true', dest='comprar',
-                        help='Muestra los jugadores que tienes que comprar.')
+
 
     args = parser.parse_args()
     sleep(1)
 
+    ##### INIT
     if args.init:
-        print '\n[*] Initializing the database...'
+        print '\n[*] Initializing the database.'
         if db.rowcount('SELECT * FROM users'):
             res = raw_input(
                 '\tDatabase contains data, %sdo you want to remove%s it and load data again? (y/n) ' % (RED, ENDC))
@@ -85,7 +85,8 @@ def main():
                 player_id, playername, club_id, clubname, value, points, position = player
                 set_player_data(player_id=player_id, playername=playername)
 
-    if args.update or args.all:
+    ##### UPDATE
+    if args.update:
         if not com.logged:
             exit(1)
 
@@ -103,31 +104,33 @@ def main():
                 set_player_data(player_id=player_id, playername=playername)
             # print_user_data(username, teamvalue, money, maxbid, userpoints, players)
 
-    if args.comprar or args.all:
+    ##### BUY
+    if args.buy:
         sleep(1)
-        print '\n[*] Jugadores para comprar:'
+        print '\n[*] Checking players to buy.'
+
         on_sale = sorted(com.players_onsale(com.community_id, only_computer=False), key=itemgetter(2), reverse=True)
-        headers = ['Name', 'Mkt Price', 'Min Price', 'Owner', 'Last Points', 'Racha']
+        headers = ['Name', 'Mkt Price', 'Min Price', 'Owner', 'Last Points 0->9', 'Racha']
         table = list()
         for player in on_sale:
-            name = player[0]
-            min_price = float(player[2])
-            mkt_price = float(player[3])
-            owner = player[6]
+            name, team, min_price, market_price, points, date, owner, position = player
             last_points = db.simple_query(
-                'SELECT p.points,p.gameday FROM players pl INNER JOIN points p ON p.idp=pl.idp AND pl.name="%s" ORDER BY p.gameday ASC' % name)
-            racha = sum([int(x[0]) for x in last_points])
-            last_points = ['+' + str(x[0]) if x[0] >= 0 else str(x[0]) for x in last_points]
+                'SELECT p.gameday,p.points \
+                FROM players pl INNER JOIN points p ON p.idp=pl.idp AND pl.name LIKE "%%%s%%" \
+                ORDER BY p.gameday DESC LIMIT 5' % name)[::-1]
+            racha = sum([int(x[1]) for x in last_points])
+            last_points = ['[%s]' % colorize_points(x[1]) for x in last_points]
             # comprar = check_buy(name, min_price, mkt_price)
             # mkt_price = locale.format("%d", mkt_price, grouping=True)
             # min_price = locale.format("%d", min_price, grouping=True)
 
-            table.append([name, mkt_price, min_price, owner, '[' + ']['.join(last_points) + ']', racha])
+            table.append([name, market_price, min_price, owner, '[' + ']['.join(last_points) + ']', racha])
 
         table = sorted(table, key=itemgetter(5), reverse=True)
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
         print '#################################################'
 
+    ##### SELL
     if args.vender or args.all:
         sleep(1)
         print '\n[*] Jugadores que hay que vender:'
@@ -556,6 +559,21 @@ def colorize_rentability(rent):
         color = GREEN
 
     return '%s%4d%%%s' % (color, rent, ENDC)
+
+
+def colorize_points(points):
+    color = WHITE
+    if points <= 0:
+        color = RED
+        points = '-'+str(points)
+    elif points <= 9:
+        color = GREEN
+    elif points < 100:
+        color = CYAN
+    else:
+        color = WHITE
+
+    return '%s%s%s' % (color, points, ENDC)
 
 
 def days_wo_price(idp):
