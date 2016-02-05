@@ -6,10 +6,12 @@ Tradunio helps you to play <a href="http://www.comunio.es">Comunio</a> game and 
 Initializes the database and retrieves the first data to work.
 
 ```python
-./tradunio.py --init```
+./tradunio.py --init
+```
 
 Updates the data of all the users and players.
 
 ```python
-./tradunio.py --update```
+./tradunio.py --update
+```
 
