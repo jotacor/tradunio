@@ -309,7 +309,9 @@ class Comunio:
         year_flag = 0
         for i in soup.find_all('table', {'class', 'tablecontent03'})[2].find_all('tr')[1:]:
             columns = i.find_all('td')
-            name = columns[1].text.strip()
+            player_id = int(re.findall('\d+', columns[0].img['src'])[0])
+            playername = columns[1].text.strip()
+            team_id = int(re.findall('\d+', columns[2].img['src'])[0])
             team = columns[2].a['title'].strip()
             min_price = float(columns[3].text.replace(".", "").strip())
             market_price = float(columns[4].text.replace(".", "").strip())
@@ -322,7 +324,7 @@ class Comunio:
             position = columns[8].text.strip()
             # Comprobamos si solamente queremos los de la computadora o no
             if (only_computer and owner == 'Computer') or not only_computer:
-                on_sale.append([name, team, min_price, market_price, points, date, owner, position])
+                on_sale.append([player_id, playername, team_id, team, min_price, market_price, points, date, owner, position])
 
         return on_sale
 
