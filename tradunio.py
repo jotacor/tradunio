@@ -6,7 +6,7 @@ Created on Oct 21, 2014
 """
 
 # TODO: User Class Comunio (active record)
-# TODO: Refactoring: Make functions inserting players, points, prices, so on
+# TODO: Refactoring: Make functions inserting players, points, prices and so on
 # TODO: Change position to a number instead the position name (problem with different languages)
 
 
@@ -152,10 +152,14 @@ def main():
 
     ##### SELL
     if args.sell:
-        sleep(1)
-        print '\n[*] Jugadores que hay que vender:'
-        # my_players = write_user_players(com.myid, 'Javi')
-        # table = check_sell(my_players)
+        print '\n[*] Checking players to sell.'
+        table = list()
+        players = get_user_players(user_id=com.myid)
+        for player in players:
+            table.append(check_sell(player_id=player[0], playername=player[1]))
+
+        table = sorted(table, key=itemgetter(0), reverse=True)
+        table = [[b,c,d,e,f,g,h] for a,b,c,d,e,f,g,h in table]
         headers = ['Player ID', 'Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Rent']
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
         print '#################################################'
@@ -205,15 +209,16 @@ def set_users_data():
     return users_data
 
 
-def get_user_players(user_id=None, username=None):
+def get_user_players(user_id=None):
     """
     Get the players of the users checking first if it is updated in database.
-    :param user_id:
-    :param username:
-    :return:
+    @param user_id:
+    @return:
     """
-    # TODO: implement get_user_players
-    pass
+    players = db.simple_query('SELECT pl.idp,pl.name,cl.idcl,cl.name,pl.position \
+                              FROM players pl, clubs cl, owners o \
+                              WHERE o.idp=pl.idp AND pl.idcl=cl.idcl AND o.idu=%s' % user_id)
+    return players
 
 
 def set_user_players(user_id=None, username=None):
@@ -237,7 +242,7 @@ def get_player_data(player_id=None, playername=None):
     """
     session = requests.session()
     url_comuniazo = 'http://www.comuniazo.com'
-    user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0'
+    user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:35.0) Gecko/20100101 Firefox/35.0'
     headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain", 'Referer': url_comuniazo,
                "User-Agent": user_agent}
     url_jugadores = url_comuniazo + '/comunio/jugadores/'
@@ -341,7 +346,6 @@ def set_transactions():
     Save to database all the transactions.
     :return: None
     """
-    until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]
     print 'Updating transactions =>',
     until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]
     news = com.get_news(until_date)
@@ -388,7 +392,7 @@ def set_transactions():
     print '%sdone%s.' % (GREEN, ENDC)
 
 
-def check_bids(myid):
+def check_bids(user_id):
     # TODO: Check last transaction date para no refrescar todo cada vez
     ret = []
     from_you = com.bids_from_you()
@@ -398,7 +402,8 @@ def check_bids(myid):
             price = trans[3]
             trans_date = translate_dates([trans[5]])[0]
             idp = com.info_player_id(player)
-            db.nocommit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)' % (idp, player, myid))
+            db.nocommit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)'
+                              % (idp, player, user_id))
             db.nocommit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (%s,%s,%s,%s)' %
                               (idp, 'Buy', price, trans_date))
             db.commit()
@@ -457,7 +462,7 @@ def check_bids(myid):
 
 def check_buy(name, min_price, mkt_price):
     """
-    Check whether it's in maximus now
+    Check if it's a good deal buy a player
     @return: boolean
     """
     set_player_data(playername=name)
@@ -478,71 +483,68 @@ def check_buy(name, min_price, mkt_price):
         return False
 
 
-def check_sell(my_players):
+def check_sell(player_id, playername):
     """
-    Comprueba si el jugador puede o debe ser vendido
+    Check the rentability of our players.
     """
-    vender = list()
-    for player in my_players:
-        idp = player[0]
-        name = player[1]
-        vende = False
-        hoy = date.today().strftime('%Y%m%d')
+    to_sell = list()
+    sell = False
+    hoy = date.today()
 
-        compra = db.simple_query(
-            'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
-        if compra is None:
-            precio_actual = float(
-                db.simple_query('SELECT price FROM prices WHERE idp=%s ORDER BY date DESC LIMIT 1' % idp)[0])
-            precio_inicial = float(db.simple_query(
-                'SELECT price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' % (
-                    idp, '%s0801' % date.today().year))[0])
-            rent = (precio_actual - precio_inicial) / precio_inicial * 100
-            vender.append([idp, name, vende, '-', precio_inicial, precio_actual, colorize_rentability(rent), rent])
-            continue
+    try:
+        bought = db.simple_query(
+        'SELECT date,price FROM transactions \
+        WHERE idp=%s AND type="Buy" \
+        ORDER BY date DESC LIMIT 1' % player_id)[0]
+    except IndexError:
+        first_date = db.simple_query('SELECT MIN(date) FROM transactions')[0][0]
+        current_price = float(db.simple_query(
+            'SELECT price FROM prices \
+            WHERE idp=%s \
+            ORDER BY date DESC LIMIT 1' % player_id)[0][0])
+        init_price = float(db.simple_query(
+            'SELECT price FROM prices \
+            WHERE idp=%s AND date>"%s" \
+            ORDER BY date ASC LIMIT 1' % (player_id, first_date))[0][0])
+        rent = (current_price - init_price) / init_price * 100
+        return [rent,player_id, playername, sell, '-', init_price, current_price, colorize_rentability(rent)]
 
-        precio_ant = 0
-        stop = 0
-        fecha_compra = compra[0]
-        precio_compra = float(compra[1])
+    prev_price, stop = 0, 0
+    bought_date, bought_price = bought[0], float(bought[1])
 
-        barras = db.simple_query(
-            'SELECT idp,date,price FROM prices WHERE idp=%s AND date>=%s ORDER BY date ASC' % (idp, compra[0]))
-        # Si el jugador no tuviera barras las rellena, o si estuvieran desactualizadas
-        if len(barras) == 0 or barras[-1][1] < hoy:
-            barras = set_player_data(idp, name)
+    prices = db.simple_query(
+        'SELECT idp,date,price \
+        FROM prices \
+        WHERE idp=%s AND date>="%s" \
+        ORDER BY date ASC' % (player_id, bought_date))
 
-        for barra in barras:
-            precio = float(barra[2])
-            if precio > precio_ant:
-                precio_ant = precio
-                stop = int(precio_ant - (precio_ant * FILTRO_STOP))
+    for price_data in prices:
+        price = float(price_data[2])
+        if price > prev_price:
+            prev_price = price
+            stop = int(prev_price - (prev_price * FILTRO_STOP))
 
-            # Comprobamos si el precio ha roto el stop
-            if precio < stop:
-                vende = True
+        # Comprobamos si el precio ha roto el stop
+        if price < stop:
+            sell = True
 
-            # Si el precio del jugador se ha recuperado y ya había entrado en venta, se demarca la venta
-            if precio > stop and vende:
-                vende = False
+        # Si el precio del jugador se ha recuperado y ya había entrado en venta, se demarca la venta
+        if price > stop and sell:
+            sell = False
 
-        # Calculamos la rentabilidad
-        rent = (precio - precio_compra) / precio_compra * 100
+    # Calculamos la rentabilidad
+    rent = (price - bought_price) / bought_price * 100
 
-        if vende:
-            vender.append([idp, name, '%s%s%s' % (GREEN, vende, ENDC), fecha_compra, precio_compra, precio,
-                           colorize_rentability(rent), rent])
-        else:
-            vender.append(
-                [idp, name, '%s' % (vende), fecha_compra, precio_compra, precio, colorize_rentability(rent), rent])
+    if sell:
+        to_sell = [rent, player_id, playername, '%s%s%s' % (GREEN, sell, ENDC),
+                        bought_date, bought_price, price,
+                        colorize_rentability(rent)]
+    else:
+        to_sell = [rent, player_id, playername, str(sell),
+                        bought_date, bought_price, price,
+                        colorize_rentability(rent)]
 
-        # Guardamos rentabilidad de los jugadores en cartera
-        db.commit_query(
-            'INSERT IGNORE INTO rentabilities (idp, date, rentability) VALUES (%s, %s, %s)' % (idp, hoy, int(rent)))
-
-    # Ordenamos por el último elemento y luego lo eliminamos
-    vender = sorted(vender, key=itemgetter(7), reverse=True)
-    return [[a, b, m, d, e, f, g] for a, b, m, d, e, f, g, h in vender]
+    return to_sell
 
 
 def translate_dates(dates):
@@ -585,9 +587,9 @@ def colorize_rentability(rent):
     elif rent < 0:
         color = YELLOW
     elif rent < 10:
-        color = CYAN
-    else:
         color = GREEN
+    else:
+        color = CYAN
 
     return '%s%4d%%%s' % (color, rent, ENDC)
 

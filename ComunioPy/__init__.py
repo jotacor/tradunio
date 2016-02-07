@@ -96,8 +96,8 @@ class Comunio:
                        'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
             req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
             soup = BeautifulSoup(req)
-            newsheader = soup.find_all('div', {'class', 'newsheader'})
-            for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})):
+            newsheader = soup.find_all('div', {'class', 'newsheader'})[1:]
+            for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})[1:]):
                 news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
                 news_title = newsheader[index].text.split(">")[1].strip()
                 if news_date < until_date:
