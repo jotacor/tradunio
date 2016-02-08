@@ -169,13 +169,16 @@ def main():
 
         table = sorted(table, key=itemgetter(9), reverse=True)
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
-        print '#######################################################################################'
+
+        if args.mail:
+            send_email(fr_email, to_email, 'Tradunio players to buy', str(tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f")))
 
     ##### SELL
     if args.sell:
         print '\n[*] Checking players to sell.'
         max_gameday = db.simple_query('SELECT MAX(gameday) from points')[0][0]
-        console,html = list(), list()
+        gamedays = [('%3s' % gameday) for gameday in range(max_gameday - 4, max_gameday + 1)]
+        console, html, table = list(), list(), list()
         players = get_user_players(user_id=com.myid)
         for player in players:
             player_id, playername, club_id, club_name, position = player
@@ -200,20 +203,24 @@ def main():
                 points = colorize_points(points)
                 last_points_array.append(points)
 
-            cons, email = check_sell(player_id=player_id, playername=playername)
+            bought_date, bought_price, market_price, to_sell, profit = check_sell(player_id, playername)
+            to_sell = colorize_boolean(to_sell)
+            profit = colorize_profit(profit)
+            table.append([playername, to_sell, bought_date, bought_price, market_price, profit, ' '.join(last_points_array), streak])
+            # console.append(cons)
+            # html.append(email)
 
-            console.append(cons)
-            html.append(email)
+        # console = sorted(console, key=itemgetter(0), reverse=True)
+        # console = [[c,d,e,f,g,h] for a,b,c,d,e,f,g,h in console]
+        # html = sorted(html, key=itemgetter(0), reverse=True)
+        # html = [[c.encode('ascii', 'xmlcharrefreplace'),d,e,f,g,h] for a,b,c,d,e,f,g,h in html]
+        # headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Profit']
+        table = sorted(table, key=itemgetter(5), reverse=True)
+        headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Profit', ' '.join(gamedays), 'Streak']
+        print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
-        console = sorted(console, key=itemgetter(0), reverse=True)
-        console = [[c,d,e,f,g,h] for a,b,c,d,e,f,g,h in console]
-        html = sorted(html, key=itemgetter(0), reverse=True)
-        html = [[c.encode('ascii', 'xmlcharrefreplace'),d,e,f,g,h] for a,b,c,d,e,f,g,h in html]
-        headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Rent']
-        print tabulate(console, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
         if args.mail:
             send_email(fr_email, to_email, 'Tradunio players to sell', str(tabulate(html, headers, tablefmt="html", numalign="right", floatfmt=",.0f")))
-        print '#################################################'
 
     com.logout()
     db.close_connection()
@@ -398,14 +405,14 @@ def set_transactions():
     :return: None
     """
     print 'Updating transactions =>',
-    until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]
+    until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]-timedelta(days=10)
     news = com.get_news(until_date)
     for new in news:
         ndate, title, text = new
         if 'Fichajes' not in title:
             continue
         pattern = re.compile(
-            ur'(?:(?:\\n)?([(\w+|\w+ \w+)]+?)(?: cambia por )([0-9\.\,]*?)(?: .*? de )(.+?) a (.+?)\.)', re.UNICODE)
+            ur'(?:(?:\\n)?([(\w+|\w+ \w+|\w+\-\w+)]+?)(?: cambia por )([0-9\.\,]*?)(?: .*? de )(.+?) a (.+?)\.)', re.UNICODE)
         transactions = re.findall(pattern, text)
         for trans in transactions:
             playername, value, fr, to = trans
@@ -558,9 +565,9 @@ def check_sell(player_id, playername):
             WHERE idp=%s AND date>"%s" \
             ORDER BY date ASC LIMIT 1' % (player_id, first_date))[0][0])
         profit = calculate_profit(init_price, current_price)
-        to_sell_console = [profit, player_id, playername, colorize_boolean(sell, html=False), '-', init_price, current_price, colorize_profit(profit, html=False)]
-        to_sell_html = [profit, player_id, playername, colorize_boolean(sell, html=True), '-', init_price, current_price, colorize_profit(profit, html=True)]
-        return to_sell_console, to_sell_html
+        # to_sell_console = [profit, player_id, playername, colorize_boolean(sell, html=False), '-', init_price, current_price, colorize_profit(profit, html=False)]
+        # to_sell_html = [profit, player_id, playername, colorize_boolean(sell, html=True), '-', init_price, current_price, colorize_profit(profit, html=True)]
+        return '-', init_price, current_price, sell, profit
 
     prev_price, stop = 0, 0
     bought_date, bought_price = bought[0], float(bought[1])
@@ -596,7 +603,7 @@ def check_sell(player_id, playername):
                     bought_date, bought_price, price,
                     colorize_profit(profit, html=True)]
 
-    return to_sell_console, to_sell_html
+    return bought_date, bought_price, price, sell, profit
 
 
 def translate_dates(dates):
