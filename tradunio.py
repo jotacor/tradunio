@@ -19,6 +19,7 @@ from datetime import date, timedelta, datetime
 from operator import itemgetter
 import re
 import requests
+import smtplib
 from tabulate import tabulate
 from time import sleep
 
@@ -39,6 +40,8 @@ c_user = config.get('comunio', 'user')
 c_passwd = config.get('comunio', 'passwd')
 c_user_id = config.getint('comunio', 'user_id')
 community_id = config.getint('comunio', 'community_id')
+fr_email = config.get('comunio', 'fr_email')
+to_email = config.get('comunio', 'to_email')
 com = Comunio(c_user, c_passwd, c_user_id, community_id, 'BBVA')
 today = date.today()
 
@@ -153,15 +156,20 @@ def main():
     ##### SELL
     if args.sell:
         print '\n[*] Checking players to sell.'
-        table = list()
+        console,html = list(), list()
         players = get_user_players(user_id=com.myid)
         for player in players:
-            table.append(check_sell(player_id=player[0], playername=player[1]))
+            cons, email = check_sell(player_id=player[0], playername=player[1])
+            console.append(cons)
+            html.append(email)
 
-        table = sorted(table, key=itemgetter(0), reverse=True)
-        table = [[b,c,d,e,f,g,h] for a,b,c,d,e,f,g,h in table]
-        headers = ['Player ID', 'Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Rent']
-        print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
+        console = sorted(console, key=itemgetter(0), reverse=True)
+        console = [[c,d,e,f,g,h] for a,b,c,d,e,f,g,h in console]
+        html = sorted(html, key=itemgetter(0), reverse=True)
+        html = [[c.encode('ascii', 'xmlcharrefreplace'),d,e,f,g,h] for a,b,c,d,e,f,g,h in html]
+        headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Rent']
+        print tabulate(console, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
+        send_email(fr_email, to_email, 'Tradunio players to sell', str(tabulate(html, headers, tablefmt="html", numalign="right", floatfmt=",.0f")))
         print '#################################################'
 
     com.logout()
@@ -506,8 +514,10 @@ def check_sell(player_id, playername):
             'SELECT price FROM prices \
             WHERE idp=%s AND date>"%s" \
             ORDER BY date ASC LIMIT 1' % (player_id, first_date))[0][0])
-        rent = (current_price - init_price) / init_price * 100
-        return [rent,player_id, playername, sell, '-', init_price, current_price, colorize_rentability(rent)]
+        profit = (current_price - init_price) / init_price * 100
+        to_sell_console = [profit,player_id, playername, colorize_boolean(sell, html=False), '-', init_price, current_price, colorize_rentability(profit, html=False)]
+        to_sell_html = [profit,player_id, playername, colorize_boolean(sell, html=True), '-', init_price, current_price, colorize_rentability(profit, html=True)]
+        return to_sell_console, to_sell_html
 
     prev_price, stop = 0, 0
     bought_date, bought_price = bought[0], float(bought[1])
@@ -532,19 +542,18 @@ def check_sell(player_id, playername):
         if price > stop and sell:
             sell = False
 
-    # Calculamos la rentabilidad
-    rent = (price - bought_price) / bought_price * 100
+    # Calculate profit
+    profit = (price - bought_price) / bought_price * 100
 
-    if sell:
-        to_sell = [rent, player_id, playername, '%s%s%s' % (GREEN, sell, ENDC),
-                        bought_date, bought_price, price,
-                        colorize_rentability(rent)]
-    else:
-        to_sell = [rent, player_id, playername, str(sell),
-                        bought_date, bought_price, price,
-                        colorize_rentability(rent)]
+    to_sell_console = [profit, player_id, playername, colorize_boolean(sell, html=False),
+                       bought_date, bought_price, price,
+                       colorize_rentability(profit, html=False)]
 
-    return to_sell
+    to_sell_html = [profit, player_id, playername, colorize_boolean(sell, html=True),
+                       bought_date, bought_price, price,
+                       colorize_rentability(profit, html=True)]
+
+    return to_sell_console, to_sell_html
 
 
 def translate_dates(dates):
@@ -580,32 +589,66 @@ def translate_dates(dates):
     return formatted_dates
 
 
-def colorize_rentability(rent):
+def colorize_rentability(rent, html=False):
     color = WHITE
+    if html:
+        end_html = '">%4d%%%%</font>' % rent
+        font = '<font color="%s' + end_html
+    else:
+        font = '%s' + ('%4d%%%%%s' % (rent, ENDC))
+
     if rent <= -10:
         color = RED
+        if html:
+            color = 'red'
     elif rent < 0:
         color = YELLOW
+        if html:
+            color = 'yellow'
     elif rent < 10:
         color = GREEN
+        if html:
+            color = 'green'
     else:
         color = CYAN
+        if html:
+            color = 'cyan'
 
-    return '%s%4d%%%s' % (color, rent, ENDC)
+    return font % color
 
 
-def colorize_points(points):
+def colorize_points(points, html=False):
     color = WHITE
-    if points <= 0:
-        color = RED
-        points = ' ' + str(abs(points))
-    elif points <= 9:
-        color = GREEN
-        points = ' ' + str(points)
-    elif points < 100:
-        color = CYAN
+    if html:
+        end_html = '">%2d%%%%</font>' % points
+        font = '<font color="%s' + end_html
+    else:
+        font = '%s' + '%s%s' % (points, ENDC)
+        if points <= 0:
+            color = RED
+            points = ' ' + str(abs(points))
+        elif points <= 9:
+            color = GREEN
+            points = ' ' + str(points)
+        elif points < 100:
+            color = CYAN
 
-    return '%s%s%s' % (color, points, ENDC)
+    return font % color
+
+
+def colorize_boolean(color, html=False):
+    init_h = '<font color="'
+    end_h = '">%s</font>' % color
+    decide = {True: {
+                True: init_h+'green'+end_h,
+                False: init_h+'red'+end_h},
+              False: {
+                  True: GREEN+str(color)+ENDC,
+                  False: RED+str(color)+ENDC,
+              }}
+
+    return decide[html][color]
+
 
 
 def days_wo_price(idp):
@@ -634,9 +677,23 @@ def print_user_data(username, teamvalue, money, maxbid, points, players):
     print '\n%s:' % username
     print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
-    headers = ['Player ID', 'Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
-    print tabulate(players, headers, tablefmt="rst", floatfmt=",.0f")
+    headers = ['Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
+    print tabulate(players[1:], headers, tablefmt="rst", floatfmt=",.0f")
 
+
+def send_email(fr, to, subject, text):
+    message = """From: <%s>
+        To: <%s>
+        MIME-Version: 1.0
+        Content-type: text/html
+        Subject: %s
+
+        %s
+        """ % (fr, to, subject, text)
+
+    s = smtplib.SMTP('localhost')
+    s.sendmail(fr, [to], text)
+    s.quit()
 
 if __name__ == '__main__':
     main()
