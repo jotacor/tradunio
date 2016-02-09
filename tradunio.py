@@ -316,8 +316,6 @@ def get_player_data(player_id=None, playername=None):
     count = 0
     dates, points, prices = list(), list(), list()
     while True and len(dates) < 2:
-        if player_id == 1698:
-            pass
         playername = check_exceptions(playername)
         req = session.get(url_jugadores + playername.replace(" ", "-").replace(".", "").replace("'", "") + suffix,
                           headers=headers).content
@@ -385,9 +383,10 @@ def set_player_data(player_id=None, playername=None):
 
         db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s' % player_id + ',%s,%s)',
                              zip(dates[:days_left], prices[:days_left]))
-        db.many_commit_query('INSERT IGNORE INTO points (idp,gameday,points) VALUES (%s' % player_id + ',%s,%s)',
-                             points)
-
+        for point in points:
+            db.nocommit_query('INSERT INTO points (idp,gameday,points) VALUES (%s,%s,%s) \
+                              ON DUPLICATE KEY UPDATE points=%s' % (player_id, point[0], point[1], point[1]))
+        db.commit()
         if len(dates) != len(prices):
             print "%sThe prices arrays and dates haven't the same size.%s" % (RED, ENDC)
 
