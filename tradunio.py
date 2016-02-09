@@ -69,7 +69,7 @@ def main():
     args = parser.parse_args()
     sleep(1)
     if not com.logged:
-        print "Not logged to Comunio, existing."
+        print "Not logged in Comunio, existing."
         exit(0)
 
     ##### INIT
@@ -102,7 +102,6 @@ def main():
 
     ##### UPDATE
     if args.update:
-
         print '\n[*] Updating money, team value, save players, prices and transactions.'
         users = set_users_data()
         set_transactions()
@@ -122,7 +121,6 @@ def main():
 
     ##### BUY
     if args.buy:
-        sleep(1)
         print '\n[*] Checking players to buy in the market.'
         max_gameday = db.simple_query('SELECT MAX(gameday) from points')[0][0]
         players_on_sale = sorted(com.players_onsale(com.community_id, only_computer=False), key=itemgetter(2),
@@ -283,10 +281,10 @@ def get_user_players(user_id=None):
 
 def set_user_players(user_id=None, username=None):
     """
-
-    :param user_id:
-    :param username:
-    :return:
+    Set the players of the user.
+    :param user_id: Id of the user.
+    :param username: Name of the user.
+    :return: [[player_id, playername, club_id, club_name, value, player_points, position]]
     """
     user_players = com.get_user_players(user_id)
     print 'Updating players of %s =>' % username,
@@ -304,6 +302,8 @@ def set_user_players(user_id=None, username=None):
 def get_player_data(player_id=None, playername=None):
     """
     Get prices from a player
+    :param player_id: Id of the player.
+    :param playername: Name of the player.
     :return: [dates], [prices], [points]
     """
     session = requests.session()
