@@ -212,11 +212,11 @@ def main():
             bought_date, bought_price, market_price, to_sell, profit = check_sell(player_id)
             to_sell = colorize_boolean(to_sell)
             profit_color = colorize_profit(profit)
-            table.append([profit, to_sell, bought_date, bought_price,
+            table.append([profit, playername, to_sell, bought_date, bought_price,
                           market_price, profit_color, ' '.join(last_points_array), streak])
 
         table = sorted(table, key=itemgetter(0), reverse=True)
-        table = [[b,c,d,e,f,g,h] for a,b,c,d,e,f,g,h in table]
+        table = [[b,c,d,e,f,g,h,i] for a,b,c,d,e,f,g,h,i in table]
         headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price',
                    'Mkt price', 'Profit', ' '.join(gamedays), 'Streak']
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
