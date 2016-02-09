@@ -118,6 +118,9 @@ def main():
             if user_id == com.get_myid():
                 # TODO: Add parse option to print or not all users
                 print_user_data(username, teamvalue, money, maxbid, userpoints, players)
+                if args.mail:
+                    text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
+                    send_email(fr_email, to_email, 'Tradunio update', text)
 
     # BUY
     if args.buy:
@@ -173,7 +176,7 @@ def main():
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
         if args.mail:
-            text = str(tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f"))
+            text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
             send_email(fr_email, to_email, 'Tradunio players to buy', text)
 
     # SELL
@@ -218,7 +221,7 @@ def main():
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
         if args.mail:
-            text = str(tabulate(html, headers, tablefmt="html", numalign="right", floatfmt=",.0f"))
+            text = tabulate(html, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
             send_email(fr_email, to_email, 'Tradunio players to sell', text)
 
     com.logout()
@@ -777,7 +780,7 @@ def send_email(fr, to, subject, text):
     :param subject: Subject.
     :param text: Text in html.
     """
-    message = Message(From=fr, To=to)
+    message = Message(From=fr, To=to, charset='utf-8')
     message.Subject = subject
     message.Html = text
     sender = Mailer('localhost')
