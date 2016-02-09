@@ -38,6 +38,7 @@ YELLOW = '\033[93m'
 YELLOW_HTML = '#ff9900'
 WHITE = '\033[97m'
 FILTRO_STOP = 0.05
+BUY_LIMIT = 1.2
 
 config = ConfigParser()
 config.read('config.conf')
@@ -67,6 +68,9 @@ def main():
 
     args = parser.parse_args()
     sleep(1)
+    if not com.logged:
+        print "Not logged to Comunio, existing."
+        exit(0)
 
     ##### INIT
     if args.init:
@@ -98,8 +102,6 @@ def main():
 
     ##### UPDATE
     if args.update:
-        if not com.logged:
-            exit(1)
 
         print '\n[*] Updating money, team value, save players, prices and transactions.'
         users = set_users_data()
@@ -228,8 +230,8 @@ def main():
 
 def get_users_data():
     """
-    Gets data of the user
-    :return:
+    Gets data of the users.
+    :return: {{user_id: username, user_points, teamvalue, money, maxbid}}
     """
     last_date = db.simple_query('SELECT MAX(date) FROM user_data LIMIT 1')[0][0]
     if last_date == today:
@@ -247,8 +249,8 @@ def get_users_data():
 
 def set_users_data():
     """
-    Gets the last data of the user from Comunio and saves it to database.
-    :return: information about the users
+    Gets the last data of the users from Comunio and saves it to database.
+    :return: {{user_id: username, user_points, teamvalue, money, maxbid}}
     """
     users_data = dict()
     today = date.today()
@@ -270,8 +272,8 @@ def set_users_data():
 def get_user_players(user_id=None):
     """
     Get the players of the users checking first if it is updated in database.
-    @param user_id:
-    @return:
+    :param user_id: Id of the user.
+    :return: ((player_id, playername, club_id, clubname, position))
     """
     players = db.simple_query('SELECT pl.idp,pl.name,cl.idcl,cl.name,pl.position \
                               FROM players pl, clubs cl, owners o \
@@ -280,6 +282,12 @@ def get_user_players(user_id=None):
 
 
 def set_user_players(user_id=None, username=None):
+    """
+
+    :param user_id:
+    :param username:
+    :return:
+    """
     user_players = com.get_user_players(user_id)
     print 'Updating players of %s =>' % username,
     for player in user_players:
@@ -296,7 +304,7 @@ def set_user_players(user_id=None, username=None):
 def get_player_data(player_id=None, playername=None):
     """
     Get prices from a player
-    @return: [dates], [prices], [points]
+    :return: [dates], [prices], [points]
     """
     session = requests.session()
     url_comuniazo = 'http://www.comuniazo.com'
@@ -364,10 +372,10 @@ def get_player_data(player_id=None, playername=None):
 def set_player_data(player_id=None, playername=None):
     """
     Sets prices and points for all the players of the user
-    @param player_id: Id of the football player
-    @param playername: Football player name
-    @param max_gameday: Max gameday to retrieve. This will avoid get point in middle of gameday.
-    @return: Players of the user id
+    :param player_id: Id of the football player
+    :param playername: Football player name
+    :param max_gameday: Max gameday to retrieve. This will avoid get point in middle of gameday.
+    :return: Players of the user id
     """
     days_left = days_wo_price(player_id)
     prices, points = list(), list()
@@ -390,10 +398,10 @@ def set_player_data(player_id=None, playername=None):
 def set_new_player(player_id, playername, position, team_id):
     """
     Set new player in the database.
-    @param player_id:
-    @param playername:
-    @param position:
-    @param team_id:
+    :param player_id:
+    :param playername:
+    :param position:
+    :param team_id:
     """
     db.commit_query('INSERT IGNORE INTO players (idp,name,position,idcl) VALUES (%s,"%s","%s",%s)'
                     % (player_id, playername, position, team_id))
@@ -402,7 +410,6 @@ def set_new_player(player_id, playername, position, team_id):
 def set_transactions():
     """
     Save to database all the transactions.
-    :return: None
     """
     print 'Updating transactions =>',
     until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]-timedelta(days=10)
@@ -518,24 +525,28 @@ def check_bids(user_id):
     return sorted(ret, key=itemgetter(3), reverse=True)
 
 
-def check_buy(name, min_price, mkt_price):
+def check_buy(playername, min_price, mkt_price):
     """
     Check if it's a good deal buy a player
-    @return: boolean
+    :param playername: Name of the football player.
+    :param min_price: Minimum price requested.
+    :param mkt_price: Market price.
+    :return: True/False if it is a good deal to buy it.
     """
     set_player_data(playername=name)
-    from_date = (date.today() - timedelta(days=5)).strftime('%Y%m%d')
+    from_date = (date.today() - timedelta(days=5))
     rows = db.simple_query(
         'SELECT pr.price,pr.date FROM prices pr,players pl \
          WHERE pl.idp=pr.idp AND pl.name=%s AND pr.date>%s ORDER BY pr.date ASC' % (name, from_date))
     max_h = 0
-    fecha = '19700101'
+    fecha = date(1970,01,01)
     for row in rows:
-        if row[0] > max_h:
-            maxH = row[0]
-            fecha = row[1]
+        price, date = row
+        if price > max_h:
+            maxH = price
+            fecha = date
     # Si la fecha a la que ha llegado es la de hoy (max_h) y el precio que solicitan no es superior al de mercado+10%, se compra
-    if fecha == date.today().strftime('%Y%m%d') and min_price < (mkt_price * 1.2):
+    if fecha == date.today() and min_price < (mkt_price * BUY_LIMIT):
         return True
     else:
         return False
@@ -544,6 +555,9 @@ def check_buy(name, min_price, mkt_price):
 def check_sell(player_id, playername):
     """
     Check the rentability of our players.
+    :param player_id: Football player id.
+    :param playername: Football player name
+    :return: bought_date, bought_price, price, sell, profit
     """
     to_sell = list()
     sell = False
@@ -595,13 +609,13 @@ def check_sell(player_id, playername):
     # Calculate profit
     profit = calculate_profit(bought_price, price)
 
-    to_sell_console = [profit, player_id, playername, colorize_boolean(sell, html=False),
+    to_sell_console = [profit, player_id, playername, colorize_boolean(sell),
                        bought_date, bought_price, price,
-                       colorize_profit(profit, html=False)]
+                       colorize_profit(profit)]
 
-    to_sell_html = [profit, player_id, playername, colorize_boolean(sell, html=True),
+    to_sell_html = [profit, player_id, playername, colorize_boolean(sell),
                     bought_date, bought_price, price,
-                    colorize_profit(profit, html=True)]
+                    colorize_profit(profit)]
 
     return bought_date, bought_price, price, sell, profit
 
@@ -609,7 +623,7 @@ def check_sell(player_id, playername):
 def translate_dates(dates):
     """
     Translates dates format from 'dd.mm' to date('yyyy-mm-dd')
-    @return: [[date,]]
+    :return: [[date,]]
     """
     formatted_dates = list()
     last = 0
@@ -639,73 +653,90 @@ def translate_dates(dates):
     return formatted_dates
 
 
-def colorize_profit(profit, html=False):
+def colorize_profit(profit):
+    """
+    Colorize the profit depending on its value.
+    :param profit: Profit.
+    :return: console_colored, html_colored
+    """
     color = {
-        True: {
+        'html': {
             profit<=-10: RED_HTML,
             -10<profit<=0: YELLOW_HTML,
             0<profit<10: GREEN_HTML,
             10<=profit<9999: CYAN_HTML },
-        False: {
+        'console': {
             profit<=-10: RED,
             -10<profit<=0: YELLOW,
             0<profit<10: GREEN,
             10<=profit<9999: CYAN },
-    }[html][True]
+    }
 
-    if html:
-        font = '<font color="%s">%4d%%</font>' % (color, profit)
-    else:
-        font = '%s%4d%%%s' % (color, profit, ENDC)
+    html_colored = '<font color="%s">%4d%%</font>' % (color['html'][True], profit)
+    console_colored = '%s%4d%%%s' % (color['console'][True], profit, ENDC)
 
-    return font
+    return console_colored
 
 
-def colorize_points(points, html=False):
+def colorize_points(points):
+    """
+    Colorize the points depending on its value.
+    :param points: Points of a player in a gameday.
+    :return: Console colored points
+    """
     color = {
-        True: {
+        'html': {
             points<=0: RED_HTML,
             0<points<=9: GREEN_HTML,
             10<=points<99: CYAN_HTML },
-        False: {
+        'console': {
             points<=0: RED,
             0<points<=9: GREEN,
             10<=points<99: CYAN },
-    }[html][True]
+    }
 
     points = str(abs(points))
-    if html:
-        font = '<font color="%s">%3s%%</font>' % (color, points)
-    else:
-        font = '%s%3s%s' % (color, points, ENDC)
+    html_colored = '<font color="%s">%3s%%</font>' % (color['html'][True], points)
+    console_colored = '%s%3s%s' % (color['console'][True], points, ENDC)
 
-    return font
+    return console_colored
 
 
-def colorize_boolean(bool, html=False):
-    decide = {True: {
+def colorize_boolean(bool):
+    """
+    Colorize the boolean depending on its value.
+    :param bool: True or False.
+    :return: True in green, False in red
+    """
+    color = {'html': {
                 True: '<font color="#33cc33">%s</font>' % bool,
                 False: '<font color="#cc3300">%s</font>' % bool },
-              False: {
-                  True: GREEN + str(bool) + ENDC,
-                  False: RED + str(bool) + ENDC }
+             'console': {
+                True: GREEN + str(bool) + ENDC,
+                False: RED + str(bool) + ENDC }
              }
 
-    return decide[html][bool]
+    return decide['console'][bool]
 
 
 def calculate_profit(price_ago, current_price):
+    """
+    Calculates the profit of a price regarding a previous one.
+    :param price_ago: First price.
+    :param current_price: Last price.
+    :return: Profit in percentage.
+    """
     profit = (current_price - price_ago) / price_ago * 100
     return profit
 
 
-def days_wo_price(idp):
+def days_wo_price(player_id):
     """
-    Returns the days that the player hasn't price in the database.
-    @param idp: Player ID
-    @return: Days without price (max 365 days)
+    Returns the days that the player has not a price in the database.
+    :param player_id: Player ID
+    :return: Days without price (max 365 days)
     """
-    max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % idp)[0][0]
+    max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % player_id)[0][0]
     try:
         res = (date.today() - max_date).days
         if not (0 < res < 365):
@@ -717,11 +748,25 @@ def days_wo_price(idp):
 
 
 def check_exceptions(playername):
+    """
+    Fix exceptions for a player name between Comunio and Comuniazo.
+    :param playername: Name of the football player.
+    :return: Corrected name.
+    """
     exceptions = {'Banega': 'Ever Banega',}
     return exceptions.get(playername, playername)
 
 
 def print_user_data(username, teamvalue, money, maxbid, points, players):
+    """
+    Prints a table with all data of an user.
+    :param username: Name of the user.
+    :param teamvalue: Value of his team.
+    :param money: Current money.
+    :param maxbid: Current max bid.
+    :param points: Current points.
+    :param players: Array of the players he owns.
+    """
     print '\n%s:' % username
     print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
@@ -730,6 +775,13 @@ def print_user_data(username, teamvalue, money, maxbid, points, players):
 
 
 def send_email(fr, to, subject, text):
+    """
+    Send an email.
+    :param fr: From.
+    :param to: Recipient.
+    :param subject: Subject.
+    :param text: Text in html.
+    """
     message = Message(From=fr, To=to)
     message.Subject = subject
     message.Html = text
