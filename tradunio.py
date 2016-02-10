@@ -119,7 +119,13 @@ def main():
                 # TODO: Add parse option to print or not all users
                 print_user_data(username, teamvalue, money, maxbid, userpoints, players)
                 if args.mail:
-                    text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
+                    text = '%s:<br/>' % username
+                    text += u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s<br/>' % (
+                        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
+                    text = text.encode('utf8')
+                    headers = ['Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
+                    _ = [ player.pop(0) for player in players ]
+                    text += tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
                     send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
 
     # BUY
