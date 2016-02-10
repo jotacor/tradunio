@@ -209,27 +209,27 @@ class Comunio:
             info.append([user_name, int(user_id), user_points, team_value, money, max_bid])
         return info
 
-    def get_info_player(self, pid):
+    def get_player_info(self, player_id):
         """'
         Get info football player using a ID
         @return: [name,position,team,points,price]
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://' + self.domain + '/tradableInfo.phtml?tid=' + pid, headers=headers).content
+        req = self.session.get('http://' + self.domain + '/tradableInfo.phtml?tid=' + str(player_id), headers=headers).content
         soup = BeautifulSoup(req)
         info = [soup.title.text.strip()]
         for i in soup.find('table', cellspacing=1).find_all('tr'):
             info.append(i.find_all('td')[1].text.replace(".", ""))
         return info
 
-    def info_player_id(self, name):
+    def info_player_id(self, playername):
         """Get id using name football player"""
         number = 0
-        name = name.title().replace(" ", "+")
+        name = playername.title().replace(" ", "+")
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
-        req = self.session.get('http://stats.comunio.es/search.php?name=' + name, headers=headers).content
+        req = self.session.get('http://stats.comunio.es/search.php?name=' + playername, headers=headers).content
         soup = BeautifulSoup(req)
         for i in soup.find_all('a', {'class', 'nowrap'}):
             number = re.search("([0-9]+)-", str(i)).group(1)
@@ -339,8 +339,8 @@ class Comunio:
         soup = BeautifulSoup(req)
         table = list()
         for i in soup.find('table', {'class', 'tablecontent03'}).find_all('tr')[1:]:
-            player, owner, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
-            table.append([player, owner, team, price, bid_date, trans_date, status])
+            player_id, player, who, team_id, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
+            table.append([player_id, player, who, team_id, team, price, bid_date, trans_date, status])
         return table
 
     def bids_from_you(self):
@@ -351,12 +351,11 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/exchangemarket.phtml?viewoffers_x=', headers=headers).content
-        # secondpage = 'http://www.comunio.es/exchangemarket.phtml?viewoffers_x=34&sort=&sortAsc=&tbl=&1277428601_total=14&1277428601_listmin=10'
         soup = BeautifulSoup(req)
         table = list()
         for i in soup.find_all('table', {'class', 'tablecontent03'})[1].find_all('tr')[1:]:
-            player, owner, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
-            table.append([player, owner, team, price, bid_date, trans_date, status])
+            player_id, player, owner, team_id, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
+            table.append([player_id, player, owner, team_id, team, price, bid_date, trans_date, status])
         return table
 
     @staticmethod
@@ -365,11 +364,14 @@ class Comunio:
         Convert table row values into strings
         @return: player, owner, team, price, bid_date, trans_date, status
         """
-        player = table.find_all('td')[0].text
-        owner = table.find_all('td')[1].text
-        team = table.find('img')['alt']
-        price = int(table.find_all('td')[3].text.replace(".", ""))
-        bid_date = table.find_all('td')[4].text
-        trans_date = table.find_all('td')[5].text
-        status = table.find_all('td')[6].text
-        return player, owner, team, price, bid_date, trans_date, status
+        columns = table.find_all('td')
+        player_id = int(re.findall('\d+', columns[0].a['href'])[0])
+        player = columns[0].text
+        owner = columns[1].text
+        team_id = int(re.findall('\d+', columns[2].img['src'])[0])
+        team = table.img['alt']
+        price = int(columns[3].text.replace(".", ""))
+        bid_date = columns[4].text
+        trans_date = columns[5].text
+        status = columns[6].text
+        return player_id, player, owner, team_id, team, price, bid_date, trans_date, status
