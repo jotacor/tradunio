@@ -124,8 +124,7 @@ def main():
                         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
                     text = text.encode('utf8')
                     headers = ['Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
-                    _ = [ player.pop(0) for player in players ]
-                    text += tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
+                    text += tabulate(players, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
                     send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
 
     # BUY
