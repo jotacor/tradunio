@@ -120,7 +120,7 @@ def main():
                 print_user_data(username, teamvalue, money, maxbid, userpoints, players)
                 if args.mail:
                     text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
-                    send_email(fr_email, to_email, 'Tradunio update', text)
+                    send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
 
     # BUY
     if args.buy:
@@ -183,14 +183,14 @@ def main():
 
         if args.mail:
             text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
-            send_email(fr_email, to_email, 'Tradunio players to buy', text)
+            send_email(fr_email, to_email, 'Tradunio players to buy %s' % today, text)
 
     # SELL
     if args.sell:
         print '\n[*] Checking players to sell.'
         max_gameday = db.simple_query('SELECT MAX(gameday) from points')[0][0]
         gamedays = [('%3s' % gameday) for gameday in range(max_gameday - 4, max_gameday + 1)]
-        console, html, table = list(), list(), list()
+        console, table = list(), list()
         players = get_user_players(user_id=com.myid)
         offers = check_bids_offers(kind='offers')
         for player in players:
@@ -236,8 +236,8 @@ def main():
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
         if args.mail:
-            text = tabulate(html, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
-            send_email(fr_email, to_email, 'Tradunio players to sell', text)
+            text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
+            send_email(fr_email, to_email, 'Tradunio players to sell %s' % today, text)
 
     com.logout()
     db.close_connection()
