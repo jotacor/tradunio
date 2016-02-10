@@ -129,8 +129,7 @@ def main():
         players_on_sale = sorted(com.players_onsale(com.community_id, only_computer=False), key=itemgetter(2),
                                  reverse=True)
         gamedays = [('%3s' % gameday) for gameday in range(max_gameday - 4, max_gameday + 1)]
-        headers = ['Name', 'Position', 'Owner', 'Month ago', 'Week ago', 'Day ago',
-                   'Mkt. price', 'Min. price', ' '.join(gamedays), 'Streak']
+        bids = check_bids_offers(kind='bids')
         table = list()
         for player in players_on_sale:
             player_id, playername, team_id, team, min_price, market_price, points, dat, owner, position = player
@@ -163,16 +162,23 @@ def main():
                 ORDER BY p.date ASC' % player_id)
             day, week, month = 0, 0, 0
             try:
-                day = colorize_profit(calculate_profit(float(prices[-2][1]), market_price))
-                week = colorize_profit(calculate_profit(float(prices[-8][1]), market_price))
-                month = colorize_profit(calculate_profit(float(prices[-30][1]), market_price))
+                day = colorize_profit(calculate_profit(prices[-2][1], market_price))
+                week = colorize_profit(calculate_profit(prices[-8][1], market_price))
+                month = colorize_profit(calculate_profit(prices[-30][1], market_price))
             except IndexError:
                 pass
 
-            table.append([playername, position, owner, month, week, day,
-                          market_price, min_price, ' '.join(last_points_array), streak])
+            bid, extra_price = 0.0, colorize_profit(0.0)
+            if player_id in bids:
+                bid = bids[player_id][2]
+                extra_price = colorize_profit(bids[player_id][3])
 
-        table = sorted(table, key=itemgetter(9), reverse=True)
+            table.append([playername, position, owner, month, week, day,
+                          market_price, min_price, bid, extra_price, ' '.join(last_points_array), streak])
+
+        headers = ['Name', 'Position', 'Owner', 'Month ago', 'Week ago', 'Day ago',
+                   'Mkt. price', 'Min. price', 'Bid', 'Extra price', ' '.join(gamedays), 'Streak']
+        table = sorted(table, key=itemgetter(11), reverse=True)
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
         if args.mail:
@@ -186,6 +192,7 @@ def main():
         gamedays = [('%3s' % gameday) for gameday in range(max_gameday - 4, max_gameday + 1)]
         console, html, table = list(), list(), list()
         players = get_user_players(user_id=com.myid)
+        offers = check_bids_offers(kind='offers')
         for player in players:
             player_id, playername, club_id, club_name, position = player
             last_points = db.simple_query(
@@ -212,13 +219,20 @@ def main():
             bought_date, bought_price, market_price, to_sell, profit = check_sell(player_id)
             to_sell = colorize_boolean(to_sell)
             profit_color = colorize_profit(profit)
-            table.append([profit, playername, to_sell, bought_date, bought_price,
-                          market_price, profit_color, ' '.join(last_points_array), streak])
+
+            offer, extra_price, who = 0.0, colorize_profit(0.0), '-'
+            if player_id in offers:
+                who = offers[player_id][1]
+                offer = offers[player_id][2]
+                extra_price = colorize_profit(offers[player_id][3])
+
+            table.append([profit, playername, to_sell, bought_date, bought_price, market_price, profit_color,
+                           offer, who, extra_price, ' '.join(last_points_array), streak])
 
         table = sorted(table, key=itemgetter(0), reverse=True)
-        table = [[b,c,d,e,f,g,h,i] for a,b,c,d,e,f,g,h,i in table]
-        headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price',
-                   'Mkt price', 'Profit', ' '.join(gamedays), 'Streak']
+        table = [[b,c,d,e,f,g,h,i,j,k,l] for a,b,c,d,e,f,g,h,i,j,k,l in table]
+        headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Profit',
+                   'Offer', 'Who', 'Extra price', ' '.join(gamedays), 'Streak']
         print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
         if args.mail:
@@ -382,6 +396,9 @@ def set_player_data(player_id=None, playername=None):
         if days_left >= 365:
             days_left = len(dates)
 
+        if not db.rowcount('SELECT idp FROM players WHERE idp=%s' % player_id):
+            player = com.get_player_info(player_id)
+            set_new_player(player_id, playername, position, team_id)
         db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s' % player_id + ',%s,%s)',
                              zip(dates[:days_left], prices[:days_left]))
         for point in points:
@@ -457,72 +474,40 @@ def set_transactions():
     print '%sdone%s.' % (GREEN, ENDC)
 
 
-def check_bids(user_id):
-    # TODO: Check last transaction date para no refrescar todo cada vez
-    ret = []
-    from_you = com.bids_from_you()
-    for trans in from_you:
-        if trans[6] == 'Efectuada':
-            player = trans[0]
-            price = trans[3]
-            trans_date = translate_dates([trans[5]])[0]
-            idp = com.info_player_id(player)
-            db.nocommit_query('INSERT OR REPLACE INTO players (idp, name, idu) VALUES (%s,%s,%s)'
-                              % (idp, player, user_id))
-            db.nocommit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (%s,%s,%s,%s)' %
-                              (idp, 'Buy', price, trans_date))
-            db.commit()
-            ret.append([idp, player, float(price), trans_date, '%sBought%s' % (GREEN, ENDC), colorize_profit(0.0)])
-        elif trans[6] == 'Pendiente':
-            player = trans[0]
-            price = trans[3]
-            trans_date = translate_dates([trans[5]])[0]
-            idp = com.info_player_id(player)
-            ret.append([idp, player, float(price), trans_date, '%sBid%s' % (BLUE, ENDC), colorize_profit(0.0)])
+def check_bids_offers(kind=None):
+    if kind == 'bids':
+        bids_offers = dict()
+        from_you = com.bids_from_you()
+        for bid in from_you:
+            player_id, playername, owner, team_id, team, price, bid_date, trans_date, status = bid
+            if status == 'Pendiente' or status == 'Pending':
+                _, prices, _ = get_player_data(player_id=player_id, playername=playername)
+                extra_price = calculate_profit(prices[0], price)
+                bids_offers[player_id] = [ playername, owner, price, extra_price ]
+    elif kind == 'offers':
+        bids_offers = dict()
+        to_you = com.bids_to_you()
+        player_ant, price_ant = 0, 0
+        for offer in to_you:
+            player_id, playername, who, team_id, team, price, bid_date, trans_date, status = offer
+            if status == 'Pendiente' or status == 'Pending':
+                if player_ant == player_id and price < price_ant:
+                    # Only saves the max offer for every player
+                    continue
+                    precio_compra = db.simple_query(
+                        'SELECT price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1'
+                            % player_id)
 
-    to_you = com.bids_to_you()
-    for trans in to_you:
-        if trans[6] == 'Efectuada':
-            player = trans[0]
-            price = trans[3]
-            trans_date = translate_dates([trans[5]])[0]
-            idp = com.info_player_id(player)
-            db.commit_query('INSERT OR REPLACE INTO transactions (idp,type,price,date) VALUES (%s,%s,%s,%s)' %
-                            (idp, 'Sell', price, trans_date))
-            compra = db.simple_query(
-                'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
-            if compra is None:
-                # Si el jugador lo tenemos dede el inicio...
-                compra = db.simple_query(
-                    'SELECT date,price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' %
-                    (idp, '%s0801' % today.year))
+                    if len(precio_compra) == 0:
+                        precio_compra = db.simple_query(
+                            'SELECT price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1'
+                                % (player_id, '%s-08-01' % today.year))
 
-            precio_compra = float(compra[1])
-            rent = (price - precio_compra) / precio_compra * 100
-            ret.append([idp, player, float(price), trans_date, '%sSelled%s' % (RED, ENDC), colorize_profit(rent)])
-            # db.commit_query('DELETE FROM prices WHERE idp=?', (idp,) )
-            # db.commit_query('DELETE FROM players WHERE idp=?', (idp,) )
-        elif trans[6] == 'Pendiente':
-            player = trans[0]
-            price = trans[3]
-            trans_date = translate_dates([trans[5]])[0]
-            idp = com.info_player_id(player)
-            compra = db.simple_query(
-                'SELECT date,price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1' % idp)
+                    precio_compra = precio_compra[0][0]
+                    profit = calculate_profit(precio_compra, price)
+                    bids_offers[player_id] = [ playername, who, price, profit ]
 
-            if compra is None:
-                # Si el jugador lo tenemos dede el inicio...
-                compra = db.simple_query(
-                    'SELECT date,price FROM prices WHERE idp=%s AND date>%s ORDER BY date ASC LIMIT 1' %
-                    (idp, '%s0801' % today.year))
-
-            precio_compra = float(compra[1])
-            # Calculamos la rentabilidad y configuramos el color
-            rent = calculate_profit(precio_compra, price)
-            ret.append(
-                [idp, player, float(price), trans_date, '%sOffer%s' % (YELLOW, ENDC), colorize_profit(rent)])
-
-    return sorted(ret, key=itemgetter(3), reverse=True)
+    return bids_offers
 
 
 def check_buy(playername, min_price, mkt_price):
@@ -724,7 +709,7 @@ def calculate_profit(price_ago, current_price):
     :param current_price: Last price.
     :return: Profit in percentage.
     """
-    profit = (current_price - price_ago) / price_ago * 100
+    profit = (current_price - price_ago) / float(price_ago) * 100
     return profit
 
 
@@ -768,8 +753,9 @@ def print_user_data(username, teamvalue, money, maxbid, points, players):
     print '\n%s:' % username
     print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
-    headers = ['ID', 'Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
-    print tabulate(players, headers, tablefmt="rst", floatfmt=",.0f")
+    headers = ['Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
+    _ = [ player.pop(0) for player in players ]
+    print tabulate(players, headers, tablefmt="psql", floatfmt=",.0f")
 
 
 def send_email(fr, to, subject, text):
@@ -780,12 +766,21 @@ def send_email(fr, to, subject, text):
     :param subject: Subject.
     :param text: Text in html.
     """
+    text = parse_console_to_html(text)
     message = Message(From=fr, To=to, charset='utf-8')
     message.Subject = subject
     message.Html = text
     sender = Mailer('localhost')
     sender.send(message)
 
+
+def parse_console_to_html(text):
+    html_init = '<font color="%s">'
+    html_end = '</font>'
+    text = text.replace(RED, html_init % RED_HTML).replace(CYAN, html_init % CYAN_HTML)\
+               .replace(GREEN, html_init % GREEN_HTML).replace(YELLOW, html_init % YELLOW_HTML)
+    text = text.replace(ENDC, html_end)
+    return text
 
 if __name__ == '__main__':
     main()
