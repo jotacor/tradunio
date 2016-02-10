@@ -542,7 +542,7 @@ def check_sell(player_id):
     """
     Check the rentability of our players.
     :param player_id: Football player id.
-    :return: bought_date, bought_price, price, sell, profit
+    :return: bought_date, bought_price, current_price, sell, profit
     """
     sell = False
     try:
