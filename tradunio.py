@@ -125,9 +125,9 @@ def main():
                     else:
                         num_players = '<font color="%s">%s</font>' % (RED_HTML, len(players))
 
-                    text = 'User: %s - #Players: %s<br/>' % (username, num_players)
+                    text = 'User: %s #Players: %s<br/>' % (username, num_players)
                     text += u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s<br/>' % (
-                        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
+                        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), format(userpoints, ",d"))
                     text = text.encode('utf8')
                     headers = ['Name', 'Club', 'Value', 'Points', 'Position']
                     text += tabulate(players, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
@@ -754,14 +754,14 @@ def check_exceptions(playername):
     return exceptions.get(playername, playername)
 
 
-def print_user_data(username, teamvalue, money, maxbid, points, players):
+def print_user_data(username, teamvalue, money, maxbid, userpoints, players):
     """
     Prints a table with all data of an user.
     :param username: Name of the user.
     :param teamvalue: Value of his team.
     :param money: Current money.
     :param maxbid: Current max bid.
-    :param points: Current points.
+    :param userpoints: Current points.
     :param players: Array of the players to print.
     """
     if len(players) < MAX_PLAYERS-4:
@@ -773,7 +773,7 @@ def print_user_data(username, teamvalue, money, maxbid, points, players):
 
     print '\nUser: %s - #Players: %s' % (username, num_players)
     print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
-        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
+        format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), format(userpoints, ",d"))
     headers = ['Name', 'Club', 'Value', 'Points', 'Position']
     _ = [ player.pop(0) for player in players ]
     _ = [ player.pop(1) for player in players ]
