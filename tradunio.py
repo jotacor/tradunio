@@ -117,15 +117,13 @@ def main():
                 set_player_data(player_id=player_id, playername=playername)
 
             if user_id == com.get_myid():
-                # TODO: Add parse option to print or not all users
-                print_user_data(username, teamvalue, money, maxbid, userpoints, players)
                 if args.mail:
                     if len(players) < MAX_PLAYERS-4:
-                        num_players = '%s%s%s' % (GREEN_HTML, len(players), ENDC)
+                        num_players = '<font color="%s">%s</font>' % (GREEN_HTML, len(players))
                     elif len(players) < MAX_PLAYERS-2:
-                        num_players = '%s%s%s' % (YELLOW_HTML, len(players), ENDC)
+                        num_players = '<font color="%s">%s</font>' % (YELLOW_HTML, len(players))
                     else:
-                        num_players = '%s%s%s' % (RED_HTML, len(players), ENDC)
+                        num_players = '<font color="%s">%s</font>' % (RED_HTML, len(players))
 
                     text = 'User: %s - #Players: %s<br/>' % (username, num_players)
                     text += u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s<br/>' % (
@@ -134,6 +132,8 @@ def main():
                     headers = ['Name', 'Club', 'Value', 'Points', 'Position']
                     text += tabulate(players, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
                     send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
+                else:
+                    print_user_data(username, teamvalue, money, maxbid, userpoints, players)
 
     # BUY
     if args.buy:
@@ -192,11 +192,12 @@ def main():
         headers = ['Name', 'Position', 'Owner', 'Month ago', 'Week ago', 'Day ago',
                    'Mkt. price', 'Min. price', 'Bid', 'Extra price', ' '.join(gamedays), 'Streak']
         table = sorted(table, key=itemgetter(11), reverse=True)
-        print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
         if args.mail:
             text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
             send_email(fr_email, to_email, 'Tradunio players to buy %s' % today, text)
+        else:
+            print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
 
     # SELL
     if args.sell:
@@ -246,11 +247,12 @@ def main():
         table = [[b,c,d,e,f,g,h,i,j,k,l] for a,b,c,d,e,f,g,h,i,j,k,l in table]
         headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Profit',
                    'Offer', 'Who', 'Extra price', ' '.join(gamedays), 'Streak']
-        print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
-
         if args.mail:
             text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
             send_email(fr_email, to_email, 'Tradunio players to sell %s' % today, text)
+        else:
+            print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
+
 
     com.logout()
     db.close_connection()
