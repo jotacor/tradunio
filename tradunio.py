@@ -117,6 +117,8 @@ def main():
                 set_player_data(player_id=player_id, playername=playername)
 
             if user_id == com.get_myid():
+                _ = [ player.pop(0) for player in players ]
+                _ = [ player.pop(1) for player in players ]
                 if args.mail:
                     if len(players) < MAX_PLAYERS-4:
                         num_players = '<font color="%s">%s</font>' % (GREEN_HTML, len(players))
@@ -775,8 +777,6 @@ def print_user_data(username, teamvalue, money, maxbid, userpoints, players):
     print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), format(userpoints, ",d"))
     headers = ['Name', 'Club', 'Value', 'Points', 'Position']
-    _ = [ player.pop(0) for player in players ]
-    _ = [ player.pop(1) for player in players ]
     print tabulate(players, headers, tablefmt="psql", floatfmt=",.0f")
 
 
