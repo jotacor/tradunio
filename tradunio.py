@@ -39,6 +39,7 @@ YELLOW_HTML = '#ff9900'
 WHITE = '\033[97m'
 FILTRO_STOP = 0.05
 BUY_LIMIT = 1.2
+MAX_PLAYERS = 25
 
 config = ConfigParser()
 config.read('config.conf')
@@ -119,11 +120,18 @@ def main():
                 # TODO: Add parse option to print or not all users
                 print_user_data(username, teamvalue, money, maxbid, userpoints, players)
                 if args.mail:
-                    text = '%s:<br/>' % username
+                    if len(players) < MAX_PLAYERS-4:
+                        num_players = '%s%s%s' % (GREEN_HTML, len(players), ENDC)
+                    elif len(players) < MAX_PLAYERS-2:
+                        num_players = '%s%s%s' % (YELLOW_HTML, len(players), ENDC)
+                    else:
+                        num_players = '%s%s%s' % (RED_HTML, len(players), ENDC)
+
+                    text = 'User: %s - #Players: %s<br/>' % (username, num_players)
                     text += u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s<br/>' % (
                         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
                     text = text.encode('utf8')
-                    headers = ['Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
+                    headers = ['Name', 'Club', 'Value', 'Points', 'Position']
                     text += tabulate(players, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
                     send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
 
@@ -448,7 +456,6 @@ def set_transactions():
             value = int(value.replace('.', ''))
             playername = playername.strip()
             try:
-                # TODO: Refactor please
                 player_id = db.simple_query('SELECT idp FROM players WHERE name LIKE "%%%s%%"' % playername)[0][0]
                 if 'Computer' in fr:
                     kind = 'Buy'
@@ -753,13 +760,21 @@ def print_user_data(username, teamvalue, money, maxbid, points, players):
     :param money: Current money.
     :param maxbid: Current max bid.
     :param points: Current points.
-    :param players: Array of the players he owns.
+    :param players: Array of the players to print.
     """
-    print '\n%s:' % username
+    if len(players) < MAX_PLAYERS-4:
+        num_players = '%s%s%s' % (GREEN, len(players), ENDC)
+    elif len(players) < MAX_PLAYERS-2:
+        num_players = '%s%s%s' % (YELLOW, len(players), ENDC)
+    else:
+        num_players = '%s%s%s' % (RED, len(players), ENDC)
+
+    print '\nUser: %s - #Players: %s' % (username, num_players)
     print u'Teamvalue: %s € - Money: %s € - Max bid: %s € - Points: %s' % (
         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), points)
-    headers = ['Name', 'Club ID', 'Club', 'Value', 'Points', 'Position']
+    headers = ['Name', 'Club', 'Value', 'Points', 'Position']
     _ = [ player.pop(0) for player in players ]
+    _ = [ player.pop(1) for player in players ]
     print tabulate(players, headers, tablefmt="psql", floatfmt=",.0f")
 
 
