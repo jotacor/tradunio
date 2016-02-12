@@ -212,19 +212,24 @@ class Comunio:
     def get_player_info(self, player_id):
         """'
         Get info football player using a ID
-        @return: [name,position,team,points,price]
+        @return: [playername,position,team_id,price]
+        :param player_id:
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/tradableInfo.phtml?tid=' + str(player_id), headers=headers).content
         soup = BeautifulSoup(req)
-        info = [soup.title.text.strip()]
-        for i in soup.find('table', cellspacing=1).find_all('tr'):
-            info.append(i.find_all('td')[1].text.replace(".", ""))
-        return info
+        playername = soup.title.text.strip()
+        rows = soup.find('table', cellspacing=1).find_all('tr')
+        position = rows[0].find_all('td')[1].text
+        club_id = int(re.findall('\d+', rows[1].find_all('td')[1].img['src'])[0])
+        price = int(rows[4].find_all('td')[1].text.replace(".",""))
+        return [playername, position, club_id, price]
 
     def info_player_id(self, playername):
-        """Get id using name football player"""
+        """Get id using name football player
+        :param playername:
+        """
         number = 0
         name = playername.title().replace(" ", "+")
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
