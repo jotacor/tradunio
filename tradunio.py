@@ -752,7 +752,7 @@ def check_exceptions(playername):
     :param playername: Name of the football player.
     :return: Corrected name.
     """
-    exceptions = {'Banega': 'Ever Banega'}
+    exceptions = {'Banega': 'Ever Banega', 'Mikel': u'Mikel González'}
     return exceptions.get(playername, playername)
 
 
