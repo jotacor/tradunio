@@ -176,6 +176,7 @@ def main():
                 FROM players pl INNER JOIN prices p ON p.idp=pl.idp AND pl.idp = "%s" \
                 ORDER BY p.date ASC' % player_id)
             day, week, month = 0, 0, 0
+
             try:
                 day = colorize_profit(calculate_profit(prices[-2][1], market_price))
                 week = colorize_profit(calculate_profit(prices[-8][1], market_price))
@@ -338,6 +339,8 @@ def get_player_data(player_id=None, playername=None):
     :param playername: Name of the player.
     :return: [dates], [prices], [points]
     """
+
+
     session = requests.session()
     url_comuniazo = 'http://www.comuniazo.com'
     user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:35.0) Gecko/20100101 Firefox/35.0'
@@ -376,7 +379,8 @@ def get_player_data(player_id=None, playername=None):
             try:
                 prices.append(int(price))
             except ValueError:
-                prices.append(0)
+                # No price
+                pass
 
         try:
             html = BeautifulSoup(req)
@@ -616,11 +620,11 @@ def translate_dates(dates):
     :return: [[date,]]
     """
     formatted_dates = list()
-    last = 0
+    year = str(today.year)
     for dat in dates:
         if dat == '':
             # Repeat the last value if we find some gap in the dates
-            formatted_dates.append(formatted_dates[-1])
+            #formatted_dates.append(formatted_dates[-1])
             continue
         day = dat[:2]
         mont = dat[6:]
@@ -635,10 +639,10 @@ def translate_dates(dates):
         else:
             # Month from Comunio
             month = dat[3:5]
-        year = str(today.year - last)
-        if month + day == '0101':
+
+        if month + day == '0101' or (formatted_dates and int(month) > formatted_dates[-1].month):
             # One year less
-            last = 1
+            year = str(today.year - 1)
 
         p_date = datetime.strptime('%s-%s-%s' % (year, month, day), "%Y-%m-%d").date()
         formatted_dates.append(p_date)
@@ -794,6 +798,7 @@ def send_email(fr, to, subject, text):
     message.Html = text
     sender = Mailer('localhost')
     sender.send(message)
+    print 'Email sent.'
 
 
 def parse_console_to_html(text):
