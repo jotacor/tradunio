@@ -117,12 +117,12 @@ def main():
                 set_player_data(player_id=player_id, playername=playername)
 
             if user_id == com.get_myid():
-                _ = [ player.pop(0) for player in players ]
-                _ = [ player.pop(1) for player in players ]
+                _ = [player.pop(0) for player in players]
+                _ = [player.pop(1) for player in players]
                 if args.mail:
-                    if len(players) < MAX_PLAYERS-4:
+                    if len(players) < MAX_PLAYERS - 4:
                         num_players = '<font color="%s">%s</font>' % (GREEN_HTML, len(players))
-                    elif len(players) < MAX_PLAYERS-2:
+                    elif len(players) < MAX_PLAYERS - 2:
                         num_players = '<font color="%s">%s</font>' % (YELLOW_HTML, len(players))
                     else:
                         num_players = '<font color="%s">%s</font>' % (RED_HTML, len(players))
@@ -132,7 +132,8 @@ def main():
                         format(teamvalue, ",d"), format(money, ",d"), format(maxbid, ",d"), format(userpoints, ",d"))
                     text = text.encode('utf8')
                     headers = ['Name', 'Club', 'Value', 'Points', 'Position']
-                    text += tabulate(players, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
+                    text += tabulate(players, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode(
+                        'utf8')
                     send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
                 else:
                     print_user_data(username, teamvalue, money, maxbid, userpoints, players)
@@ -244,10 +245,10 @@ def main():
                 extra_price = colorize_profit(offers[player_id][3])
 
             table.append([profit, playername, to_sell, bought_date, bought_price, market_price, profit_color,
-                           offer, who, extra_price, ' '.join(last_points_array), streak])
+                          offer, who, extra_price, ' '.join(last_points_array), streak])
 
         table = sorted(table, key=itemgetter(0), reverse=True)
-        table = [[b,c,d,e,f,g,h,i,j,k,l] for a,b,c,d,e,f,g,h,i,j,k,l in table]
+        table = [[b, c, d, e, f, g, h, i, j, k, l] for a, b, c, d, e, f, g, h, i, j, k, l in table]
         headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Profit',
                    'Offer', 'Who', 'Extra price', ' '.join(gamedays), 'Streak']
         if args.mail:
@@ -255,7 +256,6 @@ def main():
             send_email(fr_email, to_email, 'Tradunio players to sell %s' % today, text)
         else:
             print tabulate(table, headers, tablefmt="psql", numalign="right", floatfmt=",.0f")
-
 
     com.logout()
     db.close_connection()
@@ -332,14 +332,12 @@ def set_user_players(user_id=None, username=None):
     return user_players
 
 
-def get_player_data(player_id=None, playername=None):
+def get_player_data(playername=None):
     """
     Get prices from a player
-    :param player_id: Id of the player.
     :param playername: Name of the player.
     :return: [dates], [prices], [points]
     """
-
 
     session = requests.session()
     url_comuniazo = 'http://www.comuniazo.com'
@@ -413,13 +411,14 @@ def set_player_data(player_id=None, playername=None):
     days_left = days_wo_price(player_id)
     prices, points = list(), list()
     if days_left:
-        dates, prices, points = get_player_data(player_id=player_id, playername=playername)
+        dates, prices, points = get_player_data(playername=playername)
         if days_left >= 365:
             days_left = len(dates)
 
         if not db.rowcount('SELECT idp FROM players WHERE idp=%s' % player_id):
-            player = com.get_player_info(player_id)
-            set_new_player(player_id, playername, position, team_id)
+            playername, position, club_id, price = com.get_player_info(player_id)
+            set_new_player(player_id, playername, position, club_id)
+
         db.many_commit_query('INSERT IGNORE INTO prices (idp,date,price) VALUES (%s' % player_id + ',%s,%s)',
                              zip(dates[:days_left], prices[:days_left]))
         for point in points:
@@ -488,24 +487,28 @@ def set_transactions():
                     db.commit_query(
                         'INSERT IGNORE INTO transactions (idp, idu, type, price, date) VALUES (%s,%s,"%s",%s,"%s")'
                         % (player_id, user_id, kind, value, ndate))
-            except:
+            except IndexError:
                 # Player selled before having in database
                 pass
     print '%sdone%s.' % (GREEN, ENDC)
 
 
 def check_bids_offers(kind=None):
+    """
+    Check if you have offers for your players or show you the bids made for other players.
+    :param kind:
+    :return:
+    """
+    bids_offers = dict()
     if kind == 'bids':
-        bids_offers = dict()
         from_you = com.bids_from_you()
         for bid in from_you:
             player_id, playername, owner, team_id, team, price, bid_date, trans_date, status = bid
             if status == 'Pendiente' or status == 'Pending':
-                _, prices, _ = get_player_data(player_id=player_id, playername=playername)
+                _, prices, _ = get_player_data(playername=playername)
                 extra_price = calculate_profit(prices[0], price)
-                bids_offers[player_id] = [ playername, owner, price, extra_price ]
+                bids_offers[player_id] = [playername, owner, price, extra_price]
     elif kind == 'offers':
-        bids_offers = dict()
         to_you = com.bids_to_you()
         player_ant, price_ant = 0, 0
         for offer in to_you:
@@ -516,16 +519,16 @@ def check_bids_offers(kind=None):
                     continue
                 precio_compra = db.simple_query(
                     'SELECT price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1'
-                        % player_id)
+                    % player_id)
 
                 if not precio_compra:
                     first_date = db.simple_query('SELECT MIN(date) FROM transactions')[0][0]
                     precio_compra = db.simple_query(
                         'SELECT price FROM prices WHERE idp=%s AND date>"%s" ORDER BY date ASC LIMIT 1'
-                            % (player_id, first_date))[0][0]
+                        % (player_id, first_date))[0][0]
 
                 profit = calculate_profit(precio_compra, price)
-                bids_offers[player_id] = [ playername, who, price, profit ]
+                bids_offers[player_id] = [playername, who, price, profit]
 
     return bids_offers
 
@@ -623,8 +626,6 @@ def translate_dates(dates):
     year = str(today.year)
     for dat in dates:
         if dat == '':
-            # Repeat the last value if we find some gap in the dates
-            #formatted_dates.append(formatted_dates[-1])
             continue
         day = dat[:2]
         mont = dat[6:]
@@ -740,11 +741,8 @@ def days_wo_price(player_id):
     :return: Days without price (max 365 days)
     """
     max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % player_id)[0][0]
-    try:
-        res = (date.today() - max_date).days
-        if not (0 < res < 365):
-            res = 365
-    except:
+    res = (date.today() - max_date).days
+    if not (0 < res < 365):
         res = 365
 
     return res
@@ -770,9 +768,9 @@ def print_user_data(username, teamvalue, money, maxbid, userpoints, players):
     :param userpoints: Current points.
     :param players: Array of the players to print.
     """
-    if len(players) < MAX_PLAYERS-4:
+    if len(players) < MAX_PLAYERS - 4:
         num_players = '%s%s%s' % (GREEN, len(players), ENDC)
-    elif len(players) < MAX_PLAYERS-2:
+    elif len(players) < MAX_PLAYERS - 2:
         num_players = '%s%s%s' % (YELLOW, len(players), ENDC)
     else:
         num_players = '%s%s%s' % (RED, len(players), ENDC)
@@ -804,10 +802,11 @@ def send_email(fr, to, subject, text):
 def parse_console_to_html(text):
     html_init = '<font color="%s">'
     html_end = '</font>'
-    text = text.replace(RED, html_init % RED_HTML).replace(CYAN, html_init % CYAN_HTML)\
-               .replace(GREEN, html_init % GREEN_HTML).replace(YELLOW, html_init % YELLOW_HTML)
+    text = text.replace(RED, html_init % RED_HTML).replace(CYAN, html_init % CYAN_HTML) \
+        .replace(GREEN, html_init % GREEN_HTML).replace(YELLOW, html_init % YELLOW_HTML)
     text = text.replace(ENDC, html_end)
     return text
+
 
 if __name__ == '__main__':
     main()
