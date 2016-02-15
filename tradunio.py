@@ -519,7 +519,7 @@ def check_bids_offers(kind=None):
                     continue
                 precio_compra = db.simple_query(
                     'SELECT price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1'
-                    % player_id)
+                    % player_id)[0][0]
 
                 if not precio_compra:
                     first_date = db.simple_query('SELECT MIN(date) FROM transactions')[0][0]
@@ -741,7 +741,11 @@ def days_wo_price(player_id):
     :return: Days without price (max 365 days)
     """
     max_date = db.simple_query('SELECT MAX(date) FROM prices WHERE idp=%s LIMIT 1' % player_id)[0][0]
-    res = (date.today() - max_date).days
+    try:
+        res = (date.today() - max_date).days
+    except TypeError:
+        res = 365
+
     if not (0 < res < 365):
         res = 365
 
