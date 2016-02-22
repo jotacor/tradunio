@@ -519,16 +519,17 @@ def check_bids_offers(kind=None):
                     continue
                 precio_compra = db.simple_query(
                     'SELECT price FROM transactions WHERE idp=%s AND type="Buy" ORDER BY date DESC LIMIT 1'
-                    % player_id)[0][0]
+                    % player_id)
 
                 if not precio_compra:
                     first_date = db.simple_query('SELECT MIN(date) FROM transactions')[0][0]
                     precio_compra = db.simple_query(
                         'SELECT price FROM prices WHERE idp=%s AND date>"%s" ORDER BY date ASC LIMIT 1'
-                        % (player_id, first_date))[0][0]
+                        % (player_id, first_date))
 
-                profit = calculate_profit(precio_compra, price)
+                profit = calculate_profit(precio_compra[0][0], price)
                 bids_offers[player_id] = [playername, who, price, profit]
+                player_ant, price_ant = player_id, price
 
     return bids_offers
 
