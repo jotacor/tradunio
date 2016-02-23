@@ -509,7 +509,7 @@ def check_bids_offers(kind=None):
                 extra_price = calculate_profit(prices[0], price)
                 bids_offers[player_id] = [playername, owner, price, extra_price]
     elif kind == 'offers':
-        to_you = com.bids_to_you()
+        to_you = sorted(com.bids_to_you())
         player_ant, price_ant = 0, 0
         for offer in to_you:
             player_id, playername, who, team_id, team, price, bid_date, trans_date, status = offer
