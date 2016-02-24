@@ -213,7 +213,7 @@ class Comunio:
         """'
         Get info football player using a ID
         @return: [playername,position,team_id,price]
-        :param player_id:
+        :param player_id: Id of the football player.
         """
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
@@ -223,7 +223,7 @@ class Comunio:
         rows = soup.find('table', cellspacing=1).find_all('tr')
         position = rows[0].find_all('td')[1].text
         club_id = int(re.findall('\d+', rows[1].find_all('td')[1].img['src'])[0])
-        price = int(rows[4].find_all('td')[1].text.replace(".",""))
+        price = int(rows[9].find_all('td')[1].text.replace(".", ""))
         return [playername, position, club_id, price]
 
     def info_player_id(self, playername):
