@@ -9,7 +9,6 @@ Created on Oct 21, 2014
 # TODO: Refactoring: Make functions inserting players, points, prices and so on
 # TODO: Change position to a number instead the position name (problem with different languages)
 # TODO: Unify sell, but options to a function
-# TODO: Return always both: html and console from all funtions
 
 import argparse
 from bs4 import BeautifulSoup
@@ -40,6 +39,7 @@ WHITE = '\033[97m'
 FILTRO_STOP = 0.05
 BUY_LIMIT = 1.2
 MAX_PLAYERS = 25
+MIN_STREAK = 20
 
 config = ConfigParser()
 config.read('config.conf')
@@ -149,6 +149,7 @@ def main():
         table = list()
         for player in players_on_sale:
             player_id, playername, team_id, team, min_price, market_price, points, dat, owner, position = player
+            to_buy = colorize_boolean(check_buy(player_id, playername, min_price, market_price))
             last_points = db.simple_query(
                 'SELECT p.gameday,p.points \
                 FROM players pl INNER JOIN points p ON p.idp=pl.idp AND pl.idp = "%s" \
@@ -190,12 +191,12 @@ def main():
                 bid = bids[player_id][2]
                 extra_price = colorize_profit(bids[player_id][3])
 
-            table.append([playername, position, owner, month, week, day,
+            table.append([playername, position, to_buy, owner, month, week, day,
                           market_price, min_price, bid, extra_price, ' '.join(last_points_array), streak])
 
-        headers = ['Name', 'Position', 'Owner', 'Month ago', 'Week ago', 'Day ago',
+        headers = ['Name', 'Position', 'To Buy?', 'Owner', 'Month ago', 'Week ago', 'Day ago',
                    'Mkt. price', 'Min. price', 'Bid', 'Extra price', ' '.join(gamedays), 'Streak']
-        table = sorted(table, key=itemgetter(11), reverse=True)
+        table = sorted(table, key=itemgetter(12), reverse=True)
 
         if args.mail:
             text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
@@ -213,6 +214,8 @@ def main():
         offers = check_bids_offers(kind='offers')
         for player in players:
             player_id, playername, club_id, club_name, position = player
+            bought_date, bought_price, market_price, to_sell, profit = check_sell(player_id)
+
             last_points = db.simple_query(
                 'SELECT p.gameday,p.points \
                 FROM players pl INNER JOIN points p ON p.idp=pl.idp AND pl.idp = "%s" \
@@ -234,7 +237,19 @@ def main():
                 points = colorize_points(points)
                 last_points_array.append(points)
 
-            bought_date, bought_price, market_price, to_sell, profit = check_sell(player_id)
+            prices = db.simple_query(
+                'SELECT p.date,p.price \
+                FROM players pl INNER JOIN prices p ON p.idp=pl.idp AND pl.idp = "%s" \
+                ORDER BY p.date ASC' % player_id)
+            day, week, month = 0, 0, 0
+
+            try:
+                day = colorize_profit(calculate_profit(prices[-2][1], market_price))
+                week = colorize_profit(calculate_profit(prices[-8][1], market_price))
+                month = colorize_profit(calculate_profit(prices[-30][1], market_price))
+            except IndexError:
+                pass
+
             to_sell = colorize_boolean(to_sell)
             profit_color = colorize_profit(profit)
 
@@ -244,13 +259,15 @@ def main():
                 offer = offers[player_id][2]
                 extra_price = colorize_profit(offers[player_id][3])
 
-            table.append([profit, playername, to_sell, bought_date, bought_price, market_price, profit_color,
-                          offer, who, extra_price, ' '.join(last_points_array), streak])
+            table.append(
+                [profit, playername, position, to_sell, bought_date, month, week, day, bought_price, market_price,
+                 profit_color, offer, who, extra_price, ' '.join(last_points_array), streak])
 
         table = sorted(table, key=itemgetter(0), reverse=True)
-        table = [[b, c, d, e, f, g, h, i, j, k, l] for a, b, c, d, e, f, g, h, i, j, k, l in table]
-        headers = ['Name', 'To sell?', 'Purchase date', 'Purchase price', 'Mkt price', 'Profit',
-                   'Offer', 'Who', 'Extra price', ' '.join(gamedays), 'Streak']
+        table = [[b, c, d, e, f, g, h, i, j, k, l, m, n, o, p]
+                 for a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p in table]
+        headers = ['Name', 'Position', 'To sell?', 'Purchase date', 'Month ago', 'Week ago', 'Day ago',
+                   'Purchase price', 'Mkt price', 'Profit', 'Offer', 'Who', 'Extra price', ' '.join(gamedays), 'Streak']
         if args.mail:
             text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
             send_email(fr_email, to_email, 'Tradunio players to sell %s' % today, text)
@@ -534,29 +551,33 @@ def check_bids_offers(kind=None):
     return bids_offers
 
 
-def check_buy(playername, min_price, mkt_price):
+def check_buy(player_id, playername, min_price, mkt_price):
     """
     Check if it's a good deal buy a player
+    :param player_id: Id of the football player.
     :param playername: Name of the football player.
     :param min_price: Minimum price requested.
     :param mkt_price: Market price.
     :return: True/False if it is a good deal to buy it.
     """
-    set_player_data(playername=playername)
-    from_date = (today - timedelta(days=5))
-    rows = db.simple_query(
+    _, points = set_player_data(player_id=player_id, playername=playername)
+    first_date = db.simple_query('SELECT MIN(date) FROM transactions')[0][0]
+    last_days = (today - timedelta(days=3))
+    prices = db.simple_query(
         'SELECT pr.price,pr.date FROM prices pr,players pl \
-         WHERE pl.idp=pr.idp AND pl.name=%s AND pr.date>%s ORDER BY pr.date ASC' % (playername, from_date))
+         WHERE pl.idp=pr.idp AND pl.idp=%s AND pr.date>"%s" ORDER BY pr.date ASC' % (player_id, first_date))
     max_h = 0
     fecha = date(1970, 01, 01)
-    for row in rows:
+    for row in prices:
         price, dat = row
         if price > max_h:
             max_h = price
             fecha = dat
+
+    streak = sum([int(point) for gameday, point in points[-5:]])
     # Si la fecha a la que ha llegado es la de hoy (max_h) y
-    #   el precio que solicitan no es superior al de mercado+10%, se compra
-    if fecha == today and min_price < (mkt_price * BUY_LIMIT):
+    #   el precio que solicitan no es superior al de mercado+BUY_LIMIT, se compra
+    if fecha > last_days and min_price < (mkt_price * BUY_LIMIT) and streak > MIN_STREAK:
         return True
     else:
         return False
