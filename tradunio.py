@@ -195,7 +195,7 @@ def main():
                           market_price, min_price, bid, extra_price, ' '.join(last_points_array), streak])
 
         headers = ['Name', 'Position', 'To Buy?', 'Owner', 'Month ago', 'Week ago', 'Day ago',
-                   'Mkt. price', 'Min. price', 'Bid', 'Extra price', ' '.join(gamedays), 'Streak']
+                   'Mkt. price', 'Min. price', 'Bid', 'Extra', ' '.join(gamedays), 'Streak']
         table = sorted(table, key=itemgetter(12), reverse=True)
 
         if args.mail:
@@ -260,14 +260,12 @@ def main():
                 extra_price = colorize_profit(offers[player_id][3])
 
             table.append(
-                [profit, playername, position, to_sell, bought_date, month, week, day, bought_price, market_price,
-                 profit_color, offer, who, extra_price, ' '.join(last_points_array), streak])
+                [playername, position, to_sell, bought_date, month, week, day, ' '.join(last_points_array),
+                 streak, bought_price, market_price, profit_color, offer, who, extra_price])
 
-        table = sorted(table, key=itemgetter(0), reverse=True)
-        table = [[b, c, d, e, f, g, h, i, j, k, l, m, n, o, p]
-                 for a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p in table]
+        table = sorted(table, key=itemgetter(8), reverse=True)
         headers = ['Name', 'Position', 'To sell?', 'Purchase date', 'Month ago', 'Week ago', 'Day ago',
-                   'Purchase price', 'Mkt price', 'Profit', 'Offer', 'Who', 'Extra price', ' '.join(gamedays), 'Streak']
+                   ' '.join(gamedays), 'Streak', 'Purchase price', 'Mkt price', 'Profit', 'Offer', 'Who', 'Profit']
         if args.mail:
             text = tabulate(table, headers, tablefmt="html", numalign="right", floatfmt=",.0f").encode('utf8')
             send_email(fr_email, to_email, 'Tradunio players to sell %s' % today, text)
