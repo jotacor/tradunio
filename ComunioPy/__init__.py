@@ -223,7 +223,14 @@ class Comunio:
         rows = soup.find('table', cellspacing=1).find_all('tr')
         position = rows[0].find_all('td')[1].text
         club_id = int(re.findall('\d+', rows[1].find_all('td')[1].img['src'])[0])
-        price = int(rows[9].find_all('td')[1].text.replace(".", ""))
+        for row in rows:
+            try:
+                price = int(row.find_all('td')[1].text.replace(".", ""))
+                if price > 150000:
+                    break
+            except ValueError:
+                continue
+
         return [playername, position, club_id, price]
 
     def info_player_id(self, playername):
