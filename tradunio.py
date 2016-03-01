@@ -388,6 +388,8 @@ def get_player_data(playername=None):
                 continue
 
         data_re = re.search("data: \[(([0-9nul]+,?)+)\]", req)
+        if data_re is None:
+            pass
         for price in data_re.group(1).split(','):
             try:
                 prices.append(int(price))
@@ -778,7 +780,7 @@ def check_exceptions(playername):
     :param playername: Name of the football player.
     :return: Corrected name.
     """
-    exceptions = {'Banega': 'Ever Banega', 'Mikel': u'Mikel González'}
+    exceptions = {'Banega': 'Ever Banega', 'Mikel': u'Mikel González', u'Isma López': u'Ismael López'}
     return exceptions.get(playername, playername)
 
 
