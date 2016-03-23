@@ -7,6 +7,8 @@ user_id = user_id
 community_id = community_id
 fr_email = from@email.com
 to_email = to@email.com
+admin_email = admin@email.com,admin2@email.com
+max_players = max_players_allowed
 
 [db_tradunio]
 user = tradunio

@@ -38,7 +38,6 @@ YELLOW_HTML = '#ff9900'
 WHITE = '\033[97m'
 FILTRO_STOP = 0.05
 BUY_LIMIT = 1.2
-MAX_PLAYERS = 25
 MIN_STREAK = 20
 
 config = ConfigParser()
@@ -49,6 +48,8 @@ c_user_id = config.getint('comunio', 'user_id')
 community_id = config.getint('comunio', 'community_id')
 fr_email = config.get('comunio', 'fr_email')
 to_email = config.get('comunio', 'to_email')
+admin_email = config.get('comunio', 'admin_email').split(',')
+max_players = config.getint('comunio', 'max_players')
 com = Comunio(c_user, c_passwd, c_user_id, community_id, 'BBVA')
 today = date.today()
 
@@ -106,6 +107,7 @@ def main():
         print '\n[*] Updating money, team value, save players, prices and transactions.'
         users = set_users_data()
         set_transactions()
+        max_players_text = ''
         for user_id in users:
             username, userpoints, teamvalue, money, maxbid = users[user_id]
             players = set_user_players(user_id, username)
@@ -120,9 +122,9 @@ def main():
                 _ = [player.pop(0) for player in players]
                 _ = [player.pop(1) for player in players]
                 if args.mail:
-                    if len(players) < MAX_PLAYERS - 4:
+                    if len(players) < max_players - 4:
                         num_players = '<font color="%s">%s</font>' % (GREEN_HTML, len(players))
-                    elif len(players) < MAX_PLAYERS - 2:
+                    elif len(players) < max_players - 2:
                         num_players = '<font color="%s">%s</font>' % (YELLOW_HTML, len(players))
                     else:
                         num_players = '<font color="%s">%s</font>' % (RED_HTML, len(players))
@@ -137,6 +139,13 @@ def main():
                     send_email(fr_email, to_email, 'Tradunio update %s' % today, text)
                 else:
                     print_user_data(username, teamvalue, money, maxbid, userpoints, players)
+
+            if len(players) > max_players:
+                max_players_text += 'User {{0:s}} has reached the max players allowed with #{{1:s}}<br/>'.format(
+                    username, len(players))
+
+        if max_players_text:
+            send_email(fr_email, admin_email, 'User max players reached %s' % today, max_players_text)
 
     # BUY
     if args.buy:
@@ -794,9 +803,9 @@ def print_user_data(username, teamvalue, money, maxbid, userpoints, players):
     :param userpoints: Current points.
     :param players: Array of the players to print.
     """
-    if len(players) < MAX_PLAYERS - 4:
+    if len(players) < max_players - 4:
         num_players = '%s%s%s' % (GREEN, len(players), ENDC)
-    elif len(players) < MAX_PLAYERS - 2:
+    elif len(players) < max_players - 2:
         num_players = '%s%s%s' % (YELLOW, len(players), ENDC)
     else:
         num_players = '%s%s%s' % (RED, len(players), ENDC)
