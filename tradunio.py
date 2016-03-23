@@ -141,8 +141,8 @@ def main():
                     print_user_data(username, teamvalue, money, maxbid, userpoints, players)
 
             if len(players) > max_players:
-                max_players_text += 'User {{0:s}} has reached the max players allowed with #{{1:s}}<br/>'.format(
-                    username, len(players))
+                max_players_text += 'User {0:s} has reached the max players allowed with #{1:s}<br/>'.\
+                    format(username, len(players))
 
         if max_players_text:
             send_email(fr_email, admin_email, 'User max players reached %s' % today, max_players_text)
