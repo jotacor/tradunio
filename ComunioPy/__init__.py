@@ -202,11 +202,14 @@ class Comunio:
             user_id = row.find('a')['href'].split('pid=')[1]
             user_points = int(row.find_all('td')[2].text.replace('.', ''))
             team_value = int(row.find_all('td')[3].text.replace('.', ''))
-            for user in money_bids['lista']['players']:
+            for user in money_bids['data']['users']:
                 if user['id'] == user_id:
                     money = int(user['dinero'].replace('.', ''))
                     max_bid = int(user['puja'].replace('.', ''))
+                    break
+
             info.append([user_name, int(user_id), user_points, team_value, money, max_bid])
+
         return info
 
     def get_player_info(self, player_id):
