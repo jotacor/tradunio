@@ -356,7 +356,7 @@ def set_user_players(user_id=None, username=None):
     return user_players
 
 
-def get_player_data(playername=None):
+def get_player_data(playername=None, player_id=None):
     """
     Get prices from a player
     :param playername: Name of the player.
@@ -369,32 +369,16 @@ def get_player_data(playername=None):
     headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain", 'Referer': url_comuniazo,
                "User-Agent": user_agent}
     url_jugadores = url_comuniazo + '/comunio/jugadores/'
-    suffix, lastname = '', ''
     count = 0
     dates, points, prices = list(), list(), list()
     while True and len(dates) < 2:
-        playername = check_exceptions(playername)
-        req = session.get(url_jugadores + playername.replace(" ", "-").replace(".", "").replace("'", "") + suffix,
-                          headers=headers).content
+        req = session.get(url_jugadores + player_id, headers=headers).content
         dates_re = re.search("(\"[0-9 ][0-9] de \w+\",?,?)+", req)
         try:
             dates = dates_re.group(0).replace('"', '').split(",")
             dates = translate_dates(dates)
         except AttributeError:
-            if count == 0:
-                suffix = '-2'
-                count += 1
-                continue
-            elif count == 1:
-                lastname = playername.split(" ")[1]
-                playername = playername.split(" ")[0]
-                suffix = ''
-                count += 1
-                continue
-            elif count == 2:
-                playername = lastname
-                count += 1
-                continue
+            continue
 
         data_re = re.search("data: \[(([0-9nul]+,?)+)\]", req)
         if data_re is None:
@@ -437,7 +421,7 @@ def set_player_data(player_id=None, playername=None):
     days_left = days_wo_price(player_id)
     prices, points = list(), list()
     if days_left:
-        dates, prices, points = get_player_data(playername=playername)
+        dates, prices, points = get_player_data(player_id=player_id)
         if days_left >= 365:
             days_left = len(dates)
 
