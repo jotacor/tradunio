@@ -368,11 +368,11 @@ def get_player_data(playername=None, player_id=None):
     user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:35.0) Gecko/20100101 Firefox/35.0'
     headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain", 'Referer': url_comuniazo,
                "User-Agent": user_agent}
-    url_jugadores = url_comuniazo + '/comunio/jugadores/'
+    url_jugadores = url_comuniazo + '/comunio/jugadores/' + str(player_id)
     count = 0
     dates, points, prices = list(), list(), list()
     while True and len(dates) < 2:
-        req = session.get(url_jugadores + player_id, headers=headers).content
+        req = session.get(url_jugadores, headers=headers).content
         dates_re = re.search("(\"[0-9 ][0-9] de \w+\",?,?)+", req)
         try:
             dates = dates_re.group(0).replace('"', '').split(",")
