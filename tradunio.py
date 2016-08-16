@@ -453,7 +453,12 @@ def set_transactions():
     Save to database all the transactions.
     """
     print 'Updating transactions =>',
-    until_date = db.simple_query('SELECT MAX(date) FROM transactions')[0][0] - timedelta(days=10)
+    last_transaction = db.simple_query('SELECT MAX(date) FROM transactions')[0][0]
+    if last_transaction:
+        until_date = last_transaction - timedelta(days=10)
+    else:
+        until_date = date.today() - timedelta(days=10)
+
     news = com.get_news(until_date)
     for new in news:
         ndate, title, text = new
