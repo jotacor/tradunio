@@ -200,8 +200,8 @@ class Comunio:
             money, max_bid = [0, 0]
             user_name = row.a.text
             user_id = row.find('a')['href'].split('pid=')[1]
-            user_points = int(row.find_all('td')[2].text.replace('.', ''))
-            team_value = int(row.find_all('td')[3].text.replace('.', ''))
+            user_points = int(row.find_all('td')[3].text.replace('.', ''))
+            team_value = int(row.find_all('td')[4].text.replace('.', ''))
             for user in money_bids['data']['users']:
                 if user['id'] == user_id:
                     money = int(user['dinero'].replace('.', ''))
