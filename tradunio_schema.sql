@@ -1,11 +1,3 @@
-CREATE DATABASE  IF NOT EXISTS `tradunio` /*!40100 DEFAULT CHARACTER SET utf8 */;
-USE `tradunio`;
--- MySQL dump 10.13  Distrib 5.7.9, for Win64 (x86_64)
---
--- Host: 127.0.0.1    Database: tradunio
--- ------------------------------------------------------
--- Server version	5.5.5-10.1.10-MariaDB
-
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;

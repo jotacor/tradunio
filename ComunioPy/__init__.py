@@ -53,7 +53,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
 
         estado = soup.find('div', {'id': 'content'}).find('div', {'id': 'manager'}).string
         if estado:
@@ -95,7 +95,7 @@ class Comunio:
             headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                        'Referer': 'http://' + self.domain + '/login.phtml', "User-Agent": user_agent}
             req = self.session.get('http://' + self.domain + '/team_news.phtml', headers=headers).content
-            soup = BeautifulSoup(req)
+            soup = BeautifulSoup(req, "html.parser")
             newsheader = soup.find_all('div', {'class', 'newsheader'})[1:]
             for index, i in enumerate(soup.find_all('div', {'class', 'article_content_text'})[1:]):
                 news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
@@ -108,7 +108,7 @@ class Comunio:
             while more_news and first_news < 200:
                 other_news = BeautifulSoup(
                     self.session.post('http://' + self.domain + '/team_news.phtml', headers=headers,
-                                      data={'newsAction': 'reload', 'first_news': first_news}).content)
+                                      data={'newsAction': 'reload', 'first_news': first_news}).content, "html.parser")
                 newsheader = other_news.find_all('div', {'class', 'newsheader'})
                 for index, i in enumerate(other_news.find_all('div', {'class', 'article_content_text'})):
                     news_date = datetime.strptime(newsheader[index].span['title'][0:8], "%d.%m.%y").date()
@@ -132,7 +132,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/standings.phtml', headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         table = soup.find('table', {'id': 'tablestandings'}).find_all('tr')
         clasificacion = list()
         [clasificacion.append('%s\t%s\t%s\t%s\t%s' % (
@@ -149,7 +149,7 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + str(userid),
                                headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         # title = soup.title.string
         # community = soup.find_all('table', border=0)[1].a.text
         # username = re.search('\((.*?)\)', soup.find('div', id='title').text).group(1)
@@ -171,7 +171,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/playerInfo.phtml?pid=' + userid, headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         info = list()
         for i in soup.find_all('td', {'class': 'name_cont'}):
             info.append(i.text.strip())
@@ -185,7 +185,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/standings.phtml', "User-Agent": user_agent}
         soup = BeautifulSoup(self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(self.community_id),
-                                              headers=headers).content)
+                                              headers=headers).content, "html.parser")
 
         headers_zo = {'Accept': '*/*', 'Referer': 'http://www.comuniazo.com/comunio/dinero',
                       'Host': 'www.comuniazo.com', 'X-Requested-With': 'XMLHttpRequest'}
@@ -221,7 +221,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/tradableInfo.phtml?tid=' + str(player_id), headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         playername = soup.title.text.strip()
         rows = soup.find('table', cellspacing=1).find_all('tr')
         position = rows[0].find_all('td')[1].text
@@ -245,7 +245,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://stats.comunio.es/search.php?name=' + playername, headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         for i in soup.find_all('a', {'class', 'nowrap'}):
             number = re.search("([0-9]+)-", str(i)).group(1)
             break  # Solo devuelve la primera coincidencia
@@ -259,7 +259,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/clubInfo.phtml?cid=' + cid, headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         plist = list()
         for i in soup.find('table', cellpadding=2).find_all('tr')[1:]:
             plist.append('%s\t%s\t%s\t%s\t%s' % (
@@ -277,7 +277,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain, headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         for i in soup.find('table', cellpadding=2).find_all('tr'):
             # Get teamid from the bets
             team1 = i.find('a')['title']
@@ -296,7 +296,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/standings.phtml', headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         for i in soup.find('table', cellpadding=2).find_all('tr'):
             try:
                 if user == i.find_all('td')[2].text.encode('utf8'):
@@ -316,7 +316,7 @@ class Comunio:
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/teamInfo.phtml?tid=' + str(community_id),
                                headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
 
         current_year = dt.today().year
         current_month = dt.today().month
@@ -351,7 +351,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/exchangemarket.phtml?viewoffers_x=', headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         table = list()
         for i in soup.find('table', {'class', 'tablecontent03'}).find_all('tr')[1:]:
             player_id, player, who, team_id, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
@@ -366,7 +366,7 @@ class Comunio:
         headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain",
                    'Referer': 'http://' + self.domain + '/team_news.phtml', "User-Agent": user_agent}
         req = self.session.get('http://' + self.domain + '/exchangemarket.phtml?viewoffers_x=', headers=headers).content
-        soup = BeautifulSoup(req)
+        soup = BeautifulSoup(req, "html.parser")
         table = list()
         for i in soup.find_all('table', {'class', 'tablecontent03'})[1].find_all('tr')[1:]:
             player_id, player, owner, team_id, team, price, bid_date, trans_date, status = self.parse_bid_table(i)
